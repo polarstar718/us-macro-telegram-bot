@@ -95,11 +95,16 @@ def generate_weekly_calendar_ai(dates):
    - "" : 통상적인 지표
 4. **상세 설명(detail)**: 각 이벤트마다 괄호 안에 들어갈 `detail` 부연 설명을 1~2줄로 구체적으로 작성하여 정보성을 극대화할 것.
 5. **투자자 핵심 보유주 최우선**: **엔비디아(NVDA)** 와 **AMD** 관련 일정(실적, 콘퍼런스, AI 가속기 발표 등)을 최우선으로 반드시 포함할 것.
-6. **주요 기업 실적 일정(earnings_schedule)**: AMD, 엔비디아(NVDA)를 포함하여 차주 또는 최근 핵심 빅테크 6개 종목을 날짜순으로 채울 것.
-7. 순수 JSON 형식만 반환할 것.
+6. **CME FedWatch 통화정책 금리 전망(fedwatch)**: 차기 FOMC 기준 금리 인하 및 동결 확률(예: "fomc": "11월 FOMC", "rate_str": "25bp 인하 88% · 동결 12%")을 필수로 포함할 것.
+7. **주요 기업 실적 일정(earnings_schedule)**: AMD, 엔비디아(NVDA)를 포함하여 차주 또는 최근 핵심 빅테크 6개 종목을 채우되, 각 기업마다 `consensus_eps`(예: "$0.92", "$1.64") 및 `consensus_rev`(예: "$6.71B", "$94.5B")를 필수로 포함할 것.
+8. 순수 JSON 형식만 반환할 것.
 
 [JSON 형식 예시]
 {{
+  "fedwatch": {{
+    "fomc": "11월 FOMC",
+    "rate_str": "25bp 인하 88% · 동결 12%"
+  }},
   "focus_items": [
     {{"title": "M7 빅테크 실적 대거 발표", "detail": "MSFT, AAPL, AMZN, META, AMD 등 AI 가속기 및 클라우드 실적 집중"}},
     {{"title": "미국 3분기 GDP & 9월 PCE 물가지수 발표", "detail": "연준의 금리 인하 속도를 결정지을 주요 성장률 및 선호 물가지표"}}
@@ -158,12 +163,12 @@ def generate_weekly_calendar_ai(dates):
     }}
   ],
   "earnings_schedule": [
-    {{"name": "AMD", "icon": "⚡", "date_str": "10월 27일 (화)", "timing": "장 마감 후"}},
-    {{"name": "메타", "icon": "💬", "date_str": "10월 28일 (수)", "timing": "장 마감 후"}},
-    {{"name": "마이크로소프트", "icon": "💻", "date_str": "10월 28일 (수)", "timing": "장 마감 후"}},
-    {{"name": "애플", "icon": "🍎", "date_str": "10월 29일 (목)", "timing": "장 마감 후"}},
-    {{"name": "아마존", "icon": "📦", "date_str": "10월 29일 (목)", "timing": "장 마감 후"}},
-    {{"name": "엔비디아", "icon": "🤖", "date_str": "11월 예정 (콘퍼런스: 10/26)", "timing": "장 마감 후"}}
+    {{"name": "AMD", "icon": "⚡", "date_str": "10월 27일 (화)", "timing": "장 마감 후", "consensus_eps": "$0.92", "consensus_rev": "$6.71B"}},
+    {{"name": "메타", "icon": "💬", "date_str": "10월 28일 (수)", "timing": "장 마감 후", "consensus_eps": "$5.25", "consensus_rev": "$40.2B"}},
+    {{"name": "마이크로소프트", "icon": "💻", "date_str": "10월 28일 (수)", "timing": "장 마감 후", "consensus_eps": "$3.10", "consensus_rev": "$64.5B"}},
+    {{"name": "애플", "icon": "🍎", "date_str": "10월 29일 (목)", "timing": "장 마감 후", "consensus_eps": "$1.60", "consensus_rev": "$94.5B"}},
+    {{"name": "아마존", "icon": "📦", "date_str": "10월 29일 (목)", "timing": "장 마감 후", "consensus_eps": "$1.14", "consensus_rev": "$157.2B"}},
+    {{"name": "엔비디아", "icon": "🤖", "date_str": "11월 예정 (콘퍼런스: 10/26)", "timing": "장 마감 후", "consensus_eps": "$0.74", "consensus_rev": "$32.9B"}}
   ]
 }}
 """
@@ -202,6 +207,10 @@ def get_default_calendar_data(dates):
     fri_d = dates["fri"].strftime("%d")
 
     return {
+        "fedwatch": {
+            "fomc": "11월 FOMC",
+            "rate_str": "25bp 인하 88% · 동결 12%"
+        },
         "focus_items": [
             {"title": "빅테크 및 AI 반도체 실적 발표 집중", "detail": "AMD, 메타, MSFT, 애플 등 실적 릴레이"},
             {"title": "미국 핵심 고용 및 PCE 물가지수 발표", "detail": "연준 기준금리 인하 경로 가늠할 분수령"}
@@ -260,13 +269,13 @@ def get_default_calendar_data(dates):
             }
         ],
         "earnings_schedule": [
-            {"name": "AMD", "icon": "⚡", "date_str": f"{mon_d[:2]}~{tue_d} (화)", "timing": "장 마감 후"},
-            {"name": "알파벳 (GOOGL)", "icon": "🔍", "date_str": f"{mon_d[:2]}~{tue_d} (화)", "timing": "장 마감 후"},
-            {"name": "마이크로소프트 (MSFT)", "icon": "💻", "date_str": f"{mon_d[:2]}~{wed_d} (수)", "timing": "장 마감 후"},
-            {"name": "메타 (META)", "icon": "💬", "date_str": f"{mon_d[:2]}~{wed_d} (수)", "timing": "장 마감 후"},
-            {"name": "애플 (AAPL)", "icon": "🍎", "date_str": f"{mon_d[:2]}~{thu_d} (목)", "timing": "장 마감 후"},
-            {"name": "아마존 (AMZN)", "icon": "📦", "date_str": f"{mon_d[:2]}~{thu_d} (목)", "timing": "장 마감 후"},
-            {"name": "엔비디아 (NVDA)", "icon": "🤖", "date_str": "차기 실적 주간 (수)", "timing": "장 마감 후"}
+            {"name": "AMD", "icon": "⚡", "date_str": f"{mon_d[:2]}~{tue_d} (화)", "timing": "장 마감 후", "consensus_eps": "$0.92", "consensus_rev": "$6.71B"},
+            {"name": "알파벳 (GOOGL)", "icon": "🔍", "date_str": f"{mon_d[:2]}~{tue_d} (화)", "timing": "장 마감 후", "consensus_eps": "$1.85", "consensus_rev": "$86.3B"},
+            {"name": "마이크로소프트 (MSFT)", "icon": "💻", "date_str": f"{mon_d[:2]}~{wed_d} (수)", "timing": "장 마감 후", "consensus_eps": "$3.10", "consensus_rev": "$64.5B"},
+            {"name": "메타 (META)", "icon": "💬", "date_str": f"{mon_d[:2]}~{wed_d} (수)", "timing": "장 마감 후", "consensus_eps": "$5.25", "consensus_rev": "$40.2B"},
+            {"name": "애플 (AAPL)", "icon": "🍎", "date_str": f"{mon_d[:2]}~{thu_d} (목)", "timing": "장 마감 후", "consensus_eps": "$1.60", "consensus_rev": "$94.5B"},
+            {"name": "아마존 (AMZN)", "icon": "📦", "date_str": f"{mon_d[:2]}~{thu_d} (목)", "timing": "장 마감 후", "consensus_eps": "$1.14", "consensus_rev": "$157.2B"},
+            {"name": "엔비디아 (NVDA)", "icon": "🤖", "date_str": "차기 실적 주간 (수)", "timing": "장 마감 후", "consensus_eps": "$0.74", "consensus_rev": "$32.9B"}
         ]
     }
 
@@ -291,6 +300,7 @@ def render_weekly_calendar_image(data, dates, output_png="output/weekly_calendar
 
     rendered_html = template.render(
         date_range=dates["range_str"],
+        fedwatch=data.get("fedwatch", {}),
         focus_items=data.get("focus_items", []),
         todo_items=data.get("todo_items", []),
         days_mon_thu=days_mon_thu,
@@ -363,20 +373,25 @@ def send_calendar_to_telegram(image_path, data, dates):
     for i, it in enumerate(data.get("focus_items", [])[:2], 1):
         focus_list.append(f"• *포커스 {i}*: {it.get('title')} ({it.get('detail')})")
 
+    fedwatch = data.get("fedwatch", {})
+    fedwatch_line = ""
+    if fedwatch:
+        fedwatch_line = f"• 🏛 *CME FedWatch ({fedwatch.get('fomc', '차기 FOMC')})*: {fedwatch.get('rate_str', '')}\n"
+
     caption = f"""🗓 *[차주 프리뷰] 미국 증시 위클리 캘린더*
 📅 *적용 주간*: {dates['range_str']}
 
-📌 *차주 핵심 포커스*
-{chr(10).join(focus_list)}
+📌 *차주 핵심 포커스 & 통화정책*
+{fedwatch_line}{chr(10).join(focus_list)}
 
 💡 *5대 고정 컬러 범례*
-• 🌸 분홍: 주요이벤트
-• 🏛 검정: 정책/통화
-• 📊 초록: 핵심지표
-• 💼 파랑: 기업실적 (NVDA & AMD 집중)
-• 🎤 노랑: 연준발언
+• 🌸 분홍: 주요이벤트 | 🏛 회색: 정책/통화 | 📊 초록: 핵심지표
+• 💼 파랑: 기업실적 (컨센서스 표기) | 🎤 노랑: 연준발언
 
-_※ 요일별 세부 발표 시간 및 중요도(★~★★★)는 첨부된 인포그래픽 캘린더를 확인하세요!_"""
+#미국증시 #위클리캘린더 #FOMC #금리전망 #실적발표 #NVDA #AMD"""
+
+    if len(caption) > 1020:
+        caption = caption[:1015] + "..."
 
     from subscriber_manager import get_subscribers
 
