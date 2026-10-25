@@ -160,6 +160,45 @@
       flex-direction: column;
       gap: 12px;
     }
+    /* CME FedWatch 금리 전망 박스 */
+    .fedwatch-box {
+      background: #EFF6FF;
+      border: 1.5px solid #93C5FD;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+    }
+    .fedwatch-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: #1D4ED8;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .fedwatch-text {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0F172A;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .fedwatch-fomc {
+      font-size: 11px;
+      color: #64748B;
+      font-weight: 700;
+    }
+    .fedwatch-prob {
+      font-size: 12px;
+      color: #DC2626;
+      font-weight: 900;
+    }
     .focus-item {
       display: flex;
       flex-direction: column;
@@ -334,25 +373,63 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 12.5px;
-      padding-bottom: 6px;
+      font-size: 12px;
+      padding-bottom: 7px;
       border-bottom: 1px dashed #E2E8F0;
     }
     .earnings-row:last-child {
       border-bottom: none;
       padding-bottom: 0;
     }
-    .earnings-co {
+    .earnings-co-block {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .earnings-co-title {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       font-weight: 800;
       color: #0F172A;
-      white-space: nowrap;
-      flex-shrink: 0;
+      font-size: 12.5px;
+    }
+    .earnings-name {
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .consensus-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #475569;
+      width: fit-content;
+    }
+    .consensus-tag {
+      color: #2563EB;
+      font-weight: 800;
+    }
+    .consensus-val {
+      color: #1E293B;
+      font-weight: 800;
+    }
+    .consensus-sep {
+      color: #94A3B8;
+    }
+    .earnings-date-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
     }
     .earnings-date-badge {
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 700;
       color: #0284C7;
       background: #E0F2FE;
@@ -361,10 +438,9 @@
       white-space: nowrap;
     }
     .earnings-timing {
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 800;
       color: #64748B;
-      margin-left: 2px;
     }
 
     /* 하단 푸터 */
@@ -419,6 +495,15 @@
         <div class="focus-card">
           <div class="card-head">Weekly Focus</div>
           <div class="card-body">
+            {% if fedwatch %}
+            <div class="fedwatch-box">
+              <div class="fedwatch-badge">🏛️ CME FedWatch 금리 전망</div>
+              <div class="fedwatch-text">
+                <span class="fedwatch-fomc">[{{ fedwatch.fomc }}]</span>
+                <span class="fedwatch-prob">{{ fedwatch.rate_str }}</span>
+              </div>
+            </div>
+            {% endif %}
             {% for item in focus_items %}
             <div class="focus-item">
               <div class="focus-num-title">① {{ item.title }}</div>
@@ -506,11 +591,21 @@
             <div class="earnings-list">
               {% for co in earnings_schedule %}
               <div class="earnings-row">
-                <div class="earnings-co">
-                  <span>{{ co.icon }}</span>
-                  <span>{{ co.name }}</span>
+                <div class="earnings-co-block">
+                  <div class="earnings-co-title">
+                    <span>{{ co.icon }}</span>
+                    <span class="earnings-name">{{ co.name }}</span>
+                  </div>
+                  {% if co.consensus_eps or co.consensus_rev %}
+                  <div class="consensus-chip">
+                    <span class="consensus-tag">예상</span>
+                    {% if co.consensus_eps %}<span class="consensus-val">EPS {{ co.consensus_eps }}</span>{% endif %}
+                    {% if co.consensus_eps and co.consensus_rev %}<span class="consensus-sep">·</span>{% endif %}
+                    {% if co.consensus_rev %}<span class="consensus-val">매출 {{ co.consensus_rev }}</span>{% endif %}
+                  </div>
+                  {% endif %}
                 </div>
-                <div>
+                <div class="earnings-date-col">
                   <span class="earnings-date-badge">{{ co.date_str }}</span>
                   <span class="earnings-timing">({{ co.timing }})</span>
                 </div>
