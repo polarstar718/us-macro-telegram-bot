@@ -1,0 +1,47 @@
+{
+  "header": {
+    "sub_title": "미국주식공부방 · DAILY MACRO BRIEF",
+    "main_title": "미국 증시 매크로 브리핑"
+  },
+  "branding": {
+    "show": true,
+    "name": "최광민",
+    "title": "AI Market Analyst",
+    "contact": "",
+    "slogan": "Dream infinite, Act right",
+    "sources": "출처: Yahoo Finance, Investing.com, Federal Reserve, Trading Economics"
+  },
+  "ai": {
+    "tone": "beginner_friendly",
+    "model": "gemini-3.5-flash"
+  },
+  "focus_stocks": [
+    { "name": "엔비디아", "ticker": "NVDA", "tag": "AI GPU 글로벌 대장주", "color": "#16A34A" },
+    { "name": "AMD", "ticker": "AMD", "tag": "AI 가속기 & CPU 강력한 도전자", "color": "#DC2626" }
+  ],
+  "indices": [
+    { "name": "S&P 500", "ticker": "^GSPC", "primary": true },
+    { "name": "다우존스", "ticker": "^DJI", "primary": true },
+    { "name": "나스닥 종합", "ticker": "^IXIC", "primary": true },
+    { "name": "필라델피아 반도체", "ticker": "^SOX", "primary": false },
+    { "name": "러셀 2000", "ticker": "^RUT", "primary": false },
+    { "name": "비트코인", "ticker": "BTC-USD", "primary": false }
+  ],
+  "macro": [
+    { "name": "미 10년물 금리", "ticker": "^TNX", "unit": "%", "is_yield": true },
+    { "name": "달러인덱스", "ticker": "DX-Y.NYB", "unit": "" },
+    { "name": "원/달러 환율", "ticker": "KRW=X", "unit": "원" },
+    { "name": "VIX 공포지수", "ticker": "^VIX", "unit": "" },
+    { "name": "WTI 유가", "ticker": "CL=F", "unit": "$" },
+    { "name": "금 선물", "ticker": "GC=F", "unit": "$" }
+  ],
+  "m7": [
+    { "name": "애플", "ticker": "AAPL" },
+    { "name": "마이크로소프트", "ticker": "MSFT" },
+    { "name": "엔비디아", "ticker": "NVDA" },
+    { "name": "아마존", "ticker": "AMZN" },
+    { "name": "알파벳", "ticker": "GOOGL" },
+    { "name": "메타", "ticker": "META" },
+    { "name": "테슬라", "ticker": "TSLA" }
+  ]
+}
