@@ -240,6 +240,108 @@
       color: #0F172A;
       font-weight: 800;
     }
+
+    /* 11개 섹터 주간 순위 가로 바 */
+    .sector-bar-container {
+      background: #F1F5F9;
+      border-bottom: 2px solid #0F172A;
+      padding: 9px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sector-bar-title {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #0F172A;
+      white-space: nowrap;
+    }
+    .sector-chips-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: nowrap;
+      overflow-x: hidden;
+      width: 100%;
+    }
+    .sector-chip {
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      white-space: nowrap;
+    }
+    .sector-rank {
+      font-size: 9px;
+      color: #94A3B8;
+      font-weight: 800;
+    }
+    .sector-name {
+      color: #334155;
+    }
+
+    /* 주간 주도주 및 52주 신고가 트렌드 */
+    .momentum-container {
+      background: #F8FAFC;
+      border-top: 2px solid #0F172A;
+      padding: 12px 18px;
+    }
+    .momentum-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .momentum-badge {
+      font-size: 12px;
+      font-weight: 800;
+      color: #DC2626;
+    }
+    .momentum-sub {
+      font-size: 11px;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .momentum-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .momentum-item {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .momentum-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .momentum-name {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .momentum-pill {
+      font-size: 9.5px;
+      font-weight: 800;
+      background: #FEE2E2;
+      color: #DC2626;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .momentum-desc {
+      font-size: 11px;
+      color: #64748B;
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -257,6 +359,22 @@
         <div class="period-label">뉴욕 마감 주간 리포트</div>
       </div>
     </div>
+
+    <!-- S&P 500 11개 섹터 주간 등락 순위 바 (Mini Sector Bar) -->
+    {% if sector_rankings %}
+    <div class="sector-bar-container">
+      <div class="sector-bar-title">📊 11개 섹터 순위</div>
+      <div class="sector-chips-wrap">
+        {% for s in sector_rankings %}
+        <div class="sector-chip {{ s.cls }}">
+          <span class="sector-rank">{{ loop.index }}</span>
+          <span class="sector-name">{{ s.name }}</span>
+          <span class="sector-pct">{{ s.pct_str }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <!-- 테이블 헤더 -->
     <div class="table-header">
@@ -309,6 +427,27 @@
       </div>
       {% endfor %}
     </div>
+
+    <!-- 주간 주도주 & 52주 신고가 트렌드 박스 -->
+    {% if momentum_leaders %}
+    <div class="momentum-container">
+      <div class="momentum-header">
+        <span class="momentum-badge">🔥 주간 주도주 & 52주 신고가 트렌드</span>
+        <span class="momentum-sub">핵심 모멘텀 대형주 및 주요 자산</span>
+      </div>
+      <div class="momentum-grid">
+        {% for m in momentum_leaders %}
+        <div class="momentum-item">
+          <div class="momentum-top">
+            <span class="momentum-name">{{ m.name }}</span>
+            <span class="momentum-pill">{{ m.badge }}</span>
+          </div>
+          <div class="momentum-desc">{{ m.desc }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <!-- 푸터 -->
     <div class="footer-bar">
