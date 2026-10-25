@@ -1,0 +1,54 @@
+name: US Macro Daily & Weekly Bot
+
+on:
+  schedule:
+    - cron: '40 21 * * 1-5' # 화~토 06:40 KST 데일리 브리핑
+    - cron: '30 10 * * 0'   # 일요일 19:30 KST 주간 특징주 & 캘린더
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '실행할 브리핑 종류 (daily 또는 weekly)'
+        required: true
+        default: 'daily'
+
+jobs:
+  run-briefing:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TZ: Asia/Seoul
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Fonts & Packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y fonts-noto-cjk fonts-noto-color-emoji
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Run Briefing Dispatch
+        run: |
+          if [ "${{ github.event.schedule }}" = "30 10 * * 0" ] || [ "${{ inputs.mode }}" = "weekly" ]; then
+            python weekly_featured.py --broadcast
+            python weekly_calendar.py --broadcast
+          else
+            python main.py --broadcast
+          fi
+
+      - name: Sync Subscribers
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add subscribers.json
+          git diff --staged --quiet || (git commit -m "chore: sync subscribers" && git push)
