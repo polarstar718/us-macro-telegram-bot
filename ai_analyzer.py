@@ -34,18 +34,22 @@ def generate_market_analysis(market_data):
 - 날짜: {market_data.get('date_str')}
 - 주요 지수: {json.dumps([{i['name']: f"{i['price']} ({i['pct_str']})"} for i in market_data.get('indices', [])], ensure_ascii=False)}
 - 매크로 지표: {json.dumps([{m['name']: f"{m['price']} ({m['change_str']})"} for m in market_data.get('macro', [])], ensure_ascii=False)}
+- 공포·탐욕 지수 (CNN Fear & Greed): {json.dumps(market_data.get('fear_greed', {}), ensure_ascii=False)}
 - 핵심 집중 종목(엔비디아 & AMD): {json.dumps([{f['name']: f"{f['price']} ({f['pct_str']}, {f['week_str']})"} for f in market_data.get('focus_stocks', [])], ensure_ascii=False)}
 - 빅테크 M7: {json.dumps([{s['name']: f"{s['price']} ({s['pct_str']})"} for s in market_data.get('m7', [])], ensure_ascii=False)}
+- 시간외/실적 이슈: {json.dumps(market_data.get('after_market') or {}, ensure_ascii=False)}
 - 최근 뉴스 헤드라인: {json.dumps([n['title'] for n in market_data.get('news', [])], ensure_ascii=False)}
 
 [작성 지침]
 1. 말투: 친절하고 이해하기 쉬운 해요체/하십시오체 혼용 (초보자 맞춤형, 복잡한 전문 용어는 일상적인 비유로 풀어서 설명)
 2. 특히 투자자가 가장 큰 비중으로 투자 중인 **엔비디아(NVDA)** 와 **AMD**에 대해 오늘 주가 움직임의 배경과 AI 반도체 수급/경쟁 관점에서 실질적인 도움이 되는 심층 브리핑(focus_analysis)을 반드시 포함할 것.
-3. JSON 형식으로만 응답할 것 (추가 설명이나 마크다운 코드블록 백틱 없이 순수 JSON만 반환)
+3. **국내 증시 영향(k_market_impact)**: 오늘 미 증시 지수(특히 필라델피아 반도체 지수 등락), 국채금리, 환율, 엔비디아 흐름을 바탕으로 **오늘 아침 한국 증시(코스피/코스닥) 및 삼성전자/SK하이닉스/2차전지 등 주요 섹터에 미칠 영향**을 명확하게 1~2줄로 요약할 것.
+4. JSON 형식으로만 응답할 것 (추가 설명이나 마크다운 코드블록 백틱 없이 순수 JSON만 반환)
 
 [JSON 형식]
 {{
   "headline": "오늘 시장을 관통하는 한 줄 요약 헤드라인",
+  "k_market_impact": "오늘 한국 증시에 미칠 영향 1~2줄 (예: 필라델피아 반도체 지수 상승 및 엔비디아 반등으로 오늘 코스피 반도체 투톱(삼성전자·SK하이닉스) 중심의 상승 출발이 기대됩니다. 원/달러 환율 안정도 외국인 수급에 우호적입니다.)",
   "focus_analysis": {{
     "nvda": {{
       "title": "엔비디아 오늘 핵심 동향 요약 제목 (예: AI 가속기 수요 견고, 블랙웰 출하 모멘텀 지속)",
@@ -134,13 +138,16 @@ def get_fallback_analysis(market_data):
         headline = "주요 기술주 매수세와 지표 안정에 힘입어 상승 마감 ㅡ 안도 랠리 지속"
         r1_title = "성장주 중심의 저가 매수세 유입"
         r1_desc = "주요 빅테크 기업들의 탄탄한 실적과 AI 생태계 성장에 대한 기대감이 시장의 투자 심리를 지지했습니다."
+        k_impact = "미 증시 기술주 훈풍과 필라델피아 반도체 지수 반등에 힘입어, 오늘 코스피 반도체 대형주 중심의 우호적 수급과 완만한 상승 출발이 예상됩니다."
     else:
         headline = "금리는 안정세를 찾았지만 경기 지표와 유가 변동성으로 숨고르기 ㅡ 경계 속 관망 국면"
         r1_title = "유가와 원자재 가격 변동성 확대"
         r1_desc = "국제 유가와 주요 원자재 가격이 요동치며 향후 물가에 대한 불확실성이 일부 투자자들의 관망세를 불렀습니다."
+        k_impact = "미 증시 매물 소화 및 환율 변동성 영향으로 오늘 국내 증시는 장 초반 관망세를 보이며 개별 종목 장세가 이어질 전망입니다."
 
     return {
         "headline": headline,
+        "k_market_impact": k_impact,
         "focus_analysis": {
             "nvda": {
                 "title": "AI 데이터센터 수요 견고하나 숨고르기 양상",
