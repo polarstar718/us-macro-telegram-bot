@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ header.main_title }}</title>
+  <!-- 프리미엄 폰트 Pretendard 및 Noto Sans KR 로드 -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background-color: #EDF2F7;
+      color: #1E293B;
+      width: 860px;
+      margin: 0 auto;
+      padding-bottom: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 (딥 네이비) */
+    .header-banner {
+      background: #0B1528;
+      color: #FFFFFF;
+      padding: 36px 36px 28px 36px;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .header-subtitle {
+      font-size: 13px;
+      font-weight: 700;
+      color: #E2B755;
+      letter-spacing: 1.2px;
+    }
+    .header-date {
+      font-size: 13px;
+      color: #94A3B8;
+      font-weight: 500;
+    }
+    .header-title {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 20px;
+    }
+    .judgment-box {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .judgment-badge {
+      background: #E5A93B;
+      color: #0F172A;
+      font-size: 12.5px;
+      font-weight: 800;
+      padding: 4px 9px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .judgment-text {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: #F8FAFC;
+    }
+
+    /* 본문 영역 */
+    .content-container {
+      padding: 24px 32px 12px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* 3대 주요 지수 카드 */
+    .indices-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .index-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 20px 22px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .index-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #64748B;
+      margin-bottom: 8px;
+    }
+    .index-price {
+      font-size: 28px;
+      font-weight: 800;
+      color: #0F172A;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .index-change {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .index-sub {
+      font-size: 12px;
+      color: #94A3B8;
+      font-weight: 500;
+    }
+
+    /* 서브 지표 스트립 (반도체, 러셀, 비트코인) */
+    .sub-indices-strip {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 12px 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    }
+    .sub-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      border-right: 1px solid #E2E8F0;
+    }
+    .sub-item:last-child {
+      border-right: none;
+    }
+    .sub-item-label {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .sub-item-val {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .sub-item-price {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #0F172A;
+    }
+    .sub-item-pct {
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    /* 핵심 보유 종목 포커스 (NVDA & AMD) */
+    .focus-section {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .focus-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .focus-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .focus-badge {
+      background: #0B1528;
+      color: #E2B755;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+    .focus-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .focus-sub {
+      font-size: 11.5px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .focus-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .focus-card {
+      background: #F8FAFC;
+      border-radius: 12px;
+      padding: 18px 20px;
+      border: 1px solid #E2E8F0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .focus-card-nvda {
+      border-top: 3.5px solid #16A34A;
+    }
+    .focus-card-amd {
+      border-top: 3.5px solid #DC2626;
+    }
+    .focus-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .focus-pill {
+      color: #FFFFFF;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .focus-stock-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-left: 6px;
+    }
+    .focus-stock-tag {
+      display: block;
+      font-size: 11px;
+      color: #64748B;
+      margin-top: 3px;
+      font-weight: 600;
+    }
+    .focus-price {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .focus-pct {
+      font-size: 13.5px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    .focus-week {
+      display: block;
+      font-size: 11px;
+      color: #94A3B8;
+      text-align: right;
+      margin-top: 2px;
+      font-weight: 500;
+    }
+    .focus-headline {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #1E293B;
+      margin-bottom: 6px;
+      line-height: 1.35;
+    }
+    .focus-desc {
+      font-size: 12.5px;
+      color: #475569;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .focus-check {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11.5px;
+      line-height: 1.45;
+    }
+    .focus-check-label {
+      color: #0F172A;
+      font-weight: 800;
+      margin-right: 6px;
+    }
+    .focus-check-text {
+      color: #334155;
+    }
+
+    /* 2단 레이아웃 (매크로 / M7) */
+    .two-column-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .section-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .section-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 16px;
+    }
+    .table-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .table-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed #F1F5F9;
+    }
+    .table-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .item-label {
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .item-ticker {
+      font-size: 11px;
+      font-weight: 500;
+      color: #94A3B8;
+    }
+    .item-values {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .item-price {
+      font-weight: 700;
+      color: #0F172A;
+      min-width: 65px;
+      text-align: right;
+    }
+    .item-change {
+      font-weight: 700;
+      min-width: 55px;
+      text-align: right;
+    }
+    .section-note {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid #F1F5F9;
+      font-size: 11.5px;
+      color: #94A3B8;
+      line-height: 1.4;
+    }
+
+    /* 하단 2단 (판단 근거 / 체크포인트) */
+    .reason-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .reason-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .reason-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .reason-num {
+      background: #0F172A;
+      color: #FFFFFF;
+      font-size: 11.5px;
+      font-weight: 800;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .reason-content-wrap {
+      flex: 1;
+    }
+    .reason-heading {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 4px;
+      line-height: 1.35;
+    }
+    .reason-body {
+      font-size: 12.5px;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    /* 체크포인트 카드 (다크 네이비 테마) */
+    .checkpoint-card {
+      background: #0B1528;
+      color: #FFFFFF;
+      border-radius: 14px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .checkpoint-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #E2B755;
+      margin-bottom: 4px;
+    }
+    .checkpoint-subtitle {
+      font-size: 11px;
+      color: #94A3B8;
+      margin-bottom: 16px;
+    }
+    .checkpoint-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .checkpoint-item {
+      border-left: 2px solid #E2B755;
+      padding-left: 10px;
+    }
+    .checkpoint-time {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #E2B755;
+      margin-bottom: 2px;
+    }
+    .checkpoint-event {
+      font-size: 12.5px;
+      color: #E2E8F0;
+      line-height: 1.45;
+    }
+
+    /* 색상 규격 (한국 증시: 빨간색 상승, 파란색 하락) */
+    .up {
+      color: #DC2626 !important; /* Red */
+    }
+    .down {
+      color: #2563EB !important; /* Blue */
+    }
+    .neutral {
+      color: #64748B !important;
+    }
+
+    /* 푸터 영역 */
+    .footer-section {
+      margin: 18px 32px 0 32px;
+      padding-top: 16px;
+      border-top: 1px solid #CBD5E1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .branding-left {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .brand-contact {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .branding-right {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 18px;
+      font-weight: 600;
+      font-style: italic;
+      color: #0B1528;
+    }
+    .branding-right span {
+      color: #D4A044;
+    }
+    .sources-line {
+      margin: 10px 32px 0 32px;
+      font-size: 10.5px;
+      color: #94A3B8;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 헤더 영역 -->
+  <div class="header-banner">
+    <div class="header-top">
+      <div class="header-subtitle">{{ header.sub_title }}</div>
+      <div class="header-date">뉴욕 마감 기준 {{ date_str }}</div>
+    </div>
+    <h1 class="header-title">{{ header.main_title }}</h1>
+    <div class="judgment-box">
+      <div class="judgment-badge">오늘의 판단</div>
+      <div class="judgment-text">{{ ai.headline }}</div>
+    </div>
+  </div>
+
+  <div class="content-container">
+
+    <!-- 3대 주요 지수 카드 -->
+    <div class="indices-grid">
+      {% for item in primary_indices %}
+      <div class="index-card">
+        <div>
+          <div class="index-name">{{ item.name }}</div>
+          <div class="index-price">{{ item.price }}</div>
+        </div>
+        <div>
+          <div class="index-change {{ item.cls }}">
+            <span>{{ item.symbol }}</span>
+            <span>{{ item.diff_str }} ({{ item.pct_str }})</span>
+          </div>
+          {% if item.week_str %}
+          <div class="index-sub">{{ item.week_str }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- 추가 지표 스트립 (반도체 SOX, 러셀 2000, 비트코인) -->
+    {% if secondary_indices %}
+    <div class="sub-indices-strip">
+      {% for item in secondary_indices %}
+      <div class="sub-item">
+        <span class="sub-item-label">{{ item.name }}</span>
+        <div class="sub-item-val">
+          <span class="sub-item-price">{{ item.price }}</span>
+          <span class="sub-item-pct {{ item.cls }}">{{ item.pct_str }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 핵심 보유 종목 포커스: AI 반도체 듀오 (NVDA & AMD) -->
+    {% if focus_stocks %}
+    <div class="focus-section">
+      <div class="focus-header">
+        <div class="focus-title-wrap">
+          <span class="focus-badge">TOP PICKS</span>
+          <span class="focus-title">핵심 보유 종목 심층 점검 · AI 반도체 듀오</span>
+        </div>
+        <span class="focus-sub">포트폴리오 집중 분석</span>
+      </div>
+      <div class="focus-grid">
+        {% for stock in focus_stocks %}
+        {% set stock_key = 'nvda' if stock.ticker == 'NVDA' else 'amd' %}
+        {% set detail = ai.focus_analysis[stock_key] if ai.focus_analysis and stock_key in ai.focus_analysis else None %}
+        <div class="focus-card focus-card-{{ stock_key }}">
+          <div class="focus-card-top">
+            <div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="focus-pill" style="background-color: {{ stock.color }};">{{ stock.ticker }}</span>
+                <span class="focus-stock-name">{{ stock.name }}</span>
+              </div>
+              <span class="focus-stock-tag">{{ stock.tag }}</span>
+            </div>
+            <div style="text-align: right;">
+              <div>
+                <span class="focus-price">{{ stock.price }}</span>
+                <span class="focus-pct {{ stock.cls }}">{{ stock.symbol }} {{ stock.pct_str }}</span>
+              </div>
+              {% if stock.week_str %}
+              <span class="focus-week">{{ stock.week_str }}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if detail %}
+          <div>
+            <div class="focus-headline">{{ detail.title }}</div>
+            <div class="focus-desc">{{ detail.analysis }}</div>
+            <div class="focus-check">
+              <span class="focus-check-label">💡 투자 체크</span>
+              <span class="focus-check-text">{{ detail.key_point }}</span>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 2단 그리드: 매크로 지표 / M7 -->
+    <div class="two-column-grid">
+
+      <!-- 매크로 핵심 지표 -->
+      <div class="section-card">
+        <div>
+          <div class="section-title">매크로 핵심 지표</div>
+          <div class="table-list">
+            {% for item in macro %}
+            <div class="table-row">
+              <div class="item-label">
+                <span>{{ item.name }}</span>
+              </div>
+              <div class="item-values">
+                <span class="item-price">{{ item.price }}</span>
+                <span class="item-change {{ item.cls }}">{{ item.change_str }}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="section-note">{{ ai.macro_note }}</div>
+      </div>
+
+      <!-- 빅테크 M7 종가 -->
+      <div class="section-card">
+        <div>
+          <div class="section-title">빅테크 M7 종가</div>
+          <div class="table-list">
+            {% for item in m7 %}
+            <div class="table-row">
+              <div class="item-label">
+                <span>{{ item.name }}</span>
+                <span class="item-ticker">{{ item.ticker }}</span>
+              </div>
+              <div class="item-values">
+                <span class="item-price">{{ item.price }}</span>
+                <span class="item-change {{ item.cls }}">{{ item.pct_str }}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="section-note">{{ ai.m7_note }}</div>
+      </div>
+
+    </div>
+
+    <!-- 하단 2단 그리드: 왜 이렇게 판단했나 / 체크포인트 -->
+    <div class="two-column-grid">
+
+      <!-- 왜 이렇게 판단했나 (초보자 맞춤형 해설) -->
+      <div class="reason-card">
+        <div class="section-title">왜 이렇게 판단했나</div>
+        <div class="reason-list">
+          {% for r in ai.reasons %}
+          <div class="reason-item">
+            <div class="reason-num">{{ loop.index }}</div>
+            <div class="reason-content-wrap">
+              <div class="reason-heading">{{ r.title }}</div>
+              <div class="reason-body">{{ r.content }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 체크포인트 (다크 테마) -->
+      <div class="checkpoint-card">
+        <div>
+          <div class="checkpoint-title">주요 체크포인트</div>
+          <div class="checkpoint-subtitle">한국 시간 기준 · 경제 지표 및 주요 일정</div>
+          <div class="checkpoint-list">
+            {% for cp in ai.checkpoints %}
+            <div class="checkpoint-item">
+              <div class="checkpoint-time">{{ cp.time }}</div>
+              <div class="checkpoint-event">{{ cp.event }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- 브랜딩 푸터 -->
+  {% if branding.show %}
+  <div class="footer-section">
+    <div class="branding-left">
+      <div class="brand-name">{{ branding.name }} {{ branding.title }}</div>
+      {% if branding.contact %}
+      <div class="brand-contact">{{ branding.contact }}</div>
+      {% endif %}
+    </div>
+    <div class="branding-right">
+      Dream infinite, <span>Act right</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="sources-line">
+    {{ branding.sources }}
+  </div>
+
+</body>
+</html>
