@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>주간 특징주 요약</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background-color: #EDF2F7;
+      color: #1E293B;
+      width: 820px;
+      margin: 0 auto;
+      padding-bottom: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 외곽 메인 컨테이너 */
+    .card-container {
+      background: #FFFFFF;
+      border: 3px solid #0F172A;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      margin: 20px auto 0 auto;
+      overflow: hidden;
+    }
+
+    /* 상단 프리미엄 다크 네이비 헤더 (원숭이 대신 세련된 위클리 배지) */
+    .header-banner {
+      background: #0B1528;
+      color: #FFFFFF;
+      padding: 24px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #0F172A;
+    }
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .header-subtitle {
+      font-size: 12px;
+      font-weight: 700;
+      color: #E2B755;
+      letter-spacing: 1.2px;
+    }
+    .header-title {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: #FFFFFF;
+    }
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .date-badge {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #F8FAFC;
+      letter-spacing: 0.5px;
+    }
+    .period-label {
+      font-size: 11.5px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+
+    /* 테이블 레이아웃 */
+    .table-wrap {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .table-header {
+      background: #2563EB;
+      color: #FFFFFF;
+      display: grid;
+      grid-template-columns: 60px 105px 1fr;
+      font-weight: 800;
+      font-size: 15px;
+      text-align: center;
+      padding: 10px 0;
+      border-bottom: 2px solid #0F172A;
+    }
+    .th-col {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .th-col:last-child {
+      border-right: none;
+    }
+
+    /* 테이블 행(Row) */
+    .table-row {
+      display: grid;
+      grid-template-columns: 60px 105px 1fr;
+      border-bottom: 2px solid #E2E8F0;
+      min-height: 110px;
+    }
+    .table-row:last-child {
+      border-bottom: none;
+    }
+
+    /* No 열 */
+    .col-no {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 900;
+      color: #0F172A;
+      border-right: 2px solid #CBD5E1;
+      background: #F8FAFC;
+    }
+
+    /* 분류 열 */
+    .col-category {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-right: 2px solid #CBD5E1;
+      background: #FFFFFF;
+      padding: 12px 6px;
+    }
+    .cat-emoji {
+      font-size: 24px;
+    }
+    .cat-name {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0F172A;
+      text-align: center;
+      line-height: 1.25;
+    }
+
+    /* 상세 열 */
+    .col-detail {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      background: #FFFFFF;
+    }
+
+    /* 노란색 형광펜 하이라이트 타이틀 */
+    .highlight-title {
+      background: #FEF08A;
+      border-bottom: 2px solid #FACC15;
+      color: #0F172A;
+      font-size: 14.5px;
+      font-weight: 800;
+      padding: 3px 8px;
+      display: inline-block;
+      width: fit-content;
+      line-height: 1.35;
+      border-radius: 2px;
+    }
+
+    /* 요인 리스트 */
+    .reason-bullets {
+      font-size: 12.5px;
+      color: #334155;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    /* 세부 섹터별 등락률 블록 */
+    .stock-group-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13.5px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+    .stock-group-item {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .group-label {
+      color: #64748B;
+      font-weight: 800;
+      font-size: 12.5px;
+      min-width: 50px;
+    }
+
+    /* 한국 증시 표준 색상: 상승 빨간색(+), 하락 파란색(-) */
+    .up {
+      color: #DC2626 !important;
+    }
+    .down {
+      color: #2563EB !important;
+    }
+    .neutral {
+      color: #64748B !important;
+    }
+
+    .badge-new {
+      background: #E0E7FF;
+      color: #3730A3;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 4px;
+      vertical-align: middle;
+    }
+
+    /* 하단 푸터 */
+    .footer-bar {
+      background: #F8FAFC;
+      border-top: 2px solid #0F172A;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .footer-left {
+      color: #0F172A;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card-container">
+    
+    <!-- 상단 프리미엄 헤더 (다크 네이비 테마) -->
+    <div class="header-banner">
+      <div class="header-left">
+        <div class="header-subtitle">WEEKLY FEATURED STOCKS BRIEF</div>
+        <h1 class="header-title">주간 특징주 요약</h1>
+      </div>
+      <div class="header-right">
+        <div class="date-badge">'{{ date_range }}</div>
+        <div class="period-label">뉴욕 마감 주간 리포트</div>
+      </div>
+    </div>
+
+    <!-- 테이블 헤더 -->
+    <div class="table-header">
+      <div class="th-col">No</div>
+      <div class="th-col">분류</div>
+      <div class="th-col" style="justify-content: flex-start; padding-left: 20px;">상세 (주간)</div>
+    </div>
+
+    <!-- 테이블 바디 -->
+    <div class="table-body">
+      {% for row in rows %}
+      <div class="table-row">
+        <!-- No -->
+        <div class="col-no">{{ loop.index }}</div>
+        
+        <!-- 분류 -->
+        <div class="col-category">
+          <span class="cat-emoji">{{ row.emoji }}</span>
+          <span class="cat-name">{{ row.category }}</span>
+        </div>
+        
+        <!-- 상세 -->
+        <div class="col-detail">
+          <!-- 형광펜 타이틀 -->
+          <div class="highlight-title">{{ row.highlight }}</div>
+          
+          <!-- 주요 원인/이슈 요약 (있을 경우) -->
+          {% if row.bullets %}
+          <div class="reason-bullets">{{ row.bullets }}</div>
+          {% endif %}
+          
+          <!-- 세부 종목 및 등락률 -->
+          <div class="stock-group-list">
+            {% for group in row.groups %}
+            <div class="stock-group-item">
+              {% if group.label %}
+              <span class="group-label">{{ group.label }} :</span>
+              {% endif %}
+              {% set stock_list = group['items'] if 'items' in group else group.stocks %}
+              {% for item in stock_list %}
+              <span class="{{ item.cls }}">
+                {{ item.ticker }} {{ item.pct_str }}
+              </span>
+              {% if not loop.last %}·{% endif %}
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- 푸터 -->
+    <div class="footer-bar">
+      <div class="footer-left">{{ branding.name }} {{ branding.title }} · 포트폴리오 주간 브리핑</div>
+      <div class="footer-right">출처: Yahoo Finance, Bloomberg, Investing.com</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
