@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>위클리 캘린더 (차주 일정 및 실적)</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background-color: #EDF2F7;
+      color: #1E293B;
+      width: 960px;
+      margin: 0 auto;
+      padding-bottom: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 외곽 컨테이너 */
+    .calendar-container {
+      background: #FFFFFF;
+      border: 3px solid #0F172A;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      margin: 20px auto 0 auto;
+      overflow: hidden;
+    }
+
+    /* 상단 헤더 (다크 네이비 테마) */
+    .header-banner {
+      background: #0B1528;
+      color: #FFFFFF;
+      padding: 24px 28px 20px 28px;
+      border-bottom: 3px solid #0F172A;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .header-subtitle {
+      font-size: 12px;
+      font-weight: 700;
+      color: #E2B755;
+      letter-spacing: 1.2px;
+    }
+    .date-badge {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 5px 14px;
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #38BDF8;
+      letter-spacing: 0.5px;
+    }
+    .header-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .header-title {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: #FFFFFF;
+    }
+
+    /* 5대 고정 컬러 범례 (Legend) */
+    .legend-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .legend-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #94A3B8;
+      margin-right: 4px;
+    }
+    .legend-item {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    /* 5대 카테고리 컬러 규격 */
+    .cat-event {
+      background: #FFE4E6 !important;
+      color: #BE123C !important;
+      border: 1px solid #FDA4AF;
+    }
+    .cat-policy {
+      background: #F1F5F9 !important;
+      color: #0F172A !important;
+      border: 1px solid #CBD5E1;
+    }
+    .cat-indicator {
+      background: #DCFCE7 !important;
+      color: #15803D !important;
+      border: 1px solid #86EFAC;
+    }
+    .cat-earnings {
+      background: #E0F2FE !important;
+      color: #0369A1 !important;
+      border: 1px solid #7DD3FC;
+    }
+    .cat-speech {
+      background: #FEF08A !important;
+      color: #854D0E !important;
+      border: 1px solid #FDE047;
+    }
+
+    /* 본문 3단 레이아웃 */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 235px 1fr 365px;
+      background: #F8FAFC;
+    }
+
+    /* 좌측 컬럼: Weekly Focus & To Do */
+    .col-left {
+      border-right: 2px solid #CBD5E1;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: #FFFFFF;
+    }
+    .focus-card, .todo-card {
+      border: 2px solid #0F172A;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+      background: #FFFFFF;
+    }
+    .card-head {
+      background: #FED7AA;
+      color: #7C2D12;
+      font-size: 13.5px;
+      font-weight: 800;
+      text-align: center;
+      padding: 8px 10px;
+      border-bottom: 2px solid #0F172A;
+      letter-spacing: 0.5px;
+    }
+    .card-body {
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .focus-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .focus-num-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #0F172A;
+      line-height: 1.35;
+    }
+    .focus-sub-text {
+      font-size: 12px;
+      color: #475569;
+      font-weight: 600;
+      line-height: 1.35;
+      padding-left: 14px;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1E293B;
+      line-height: 1.35;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #E2E8F0;
+    }
+    .todo-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .todo-bullet {
+      color: #EA580C;
+    }
+
+    /* 중앙 컬럼: 월~목 일별 캘린더 */
+    .col-center {
+      border-right: 2px solid #CBD5E1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 일별 카드 행 */
+    .day-block {
+      border-bottom: 2px solid #E2E8F0;
+      display: grid;
+      grid-template-columns: 75px 1fr;
+      min-height: 125px;
+      background: #FFFFFF;
+    }
+    .day-block:last-child {
+      border-bottom: none;
+    }
+    .day-label-col {
+      background: #F1F5F9;
+      border-right: 2px solid #E2E8F0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 4px;
+      gap: 2px;
+    }
+    .day-date {
+      font-size: 20px;
+      font-weight: 900;
+      color: #0F172A;
+    }
+    .day-name {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #475569;
+      text-transform: uppercase;
+    }
+    .day-content-col {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .event-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 12.5px;
+      line-height: 1.4;
+    }
+    .event-pill {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .event-text {
+      font-weight: 700;
+      color: #1E293B;
+    }
+    .event-star {
+      color: #DC2626;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-left: 2px;
+      font-size: 12px;
+    }
+    .event-detail {
+      font-size: 11.5px;
+      color: #64748B;
+      font-weight: 500;
+    }
+
+    /* 우측 컬럼: 금요일 + 주요 기업 실적 일정 */
+    .col-right {
+      display: flex;
+      flex-direction: column;
+      background: #FFFFFF;
+    }
+    .friday-section {
+      border-bottom: 2px solid #CBD5E1;
+    }
+
+    /* 실적 발표 일정 카드 (클립보드 모티프) */
+    .earnings-section {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      background: #FAF5FF;
+    }
+    .earnings-board {
+      border: 2px solid #0F172A;
+      border-radius: 10px;
+      background: #FFFFFF;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    .earnings-head {
+      background: #FED7AA;
+      color: #7C2D12;
+      padding: 10px 14px;
+      border-bottom: 2px solid #0F172A;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .earnings-title {
+      font-size: 13.5px;
+      font-weight: 800;
+    }
+    .earnings-sub {
+      font-size: 10.5px;
+      color: #C2410C;
+      font-weight: 700;
+    }
+    .earnings-list {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .earnings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12.5px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed #E2E8F0;
+    }
+    .earnings-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .earnings-co {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 800;
+      color: #0F172A;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .earnings-date-badge {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #0284C7;
+      background: #E0F2FE;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .earnings-timing {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #64748B;
+      margin-left: 2px;
+    }
+
+    /* 하단 푸터 */
+    .footer-bar {
+      background: #F8FAFC;
+      border-top: 2px solid #0F172A;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .footer-left {
+      color: #0F172A;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="calendar-container">
+    
+    <!-- 상단 프리미엄 헤더 -->
+    <div class="header-banner">
+      <div class="header-top">
+        <div class="header-subtitle">NEXT WEEK PREVIEW · WEEKLY MACRO & EARNINGS</div>
+        <div class="date-badge">{{ date_range }}</div>
+      </div>
+      <div class="header-main">
+        <h1 class="header-title">위클리 캘린더</h1>
+        
+        <!-- 5대 고정 컬러 범례 -->
+        <div class="legend-bar">
+          <span class="legend-title">분류 범례</span>
+          <span class="legend-item cat-event">주요이벤트</span>
+          <span class="legend-item cat-policy">정책/통화</span>
+          <span class="legend-item cat-indicator">지표</span>
+          <span class="legend-item cat-earnings">실적</span>
+          <span class="legend-item cat-speech">발언</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3단 그리드 본문 -->
+    <div class="content-grid">
+
+      <!-- [컬럼 1] Weekly Focus & To Do -->
+      <div class="col-left">
+        <!-- Weekly Focus 카드 -->
+        <div class="focus-card">
+          <div class="card-head">Weekly Focus</div>
+          <div class="card-body">
+            {% for item in focus_items %}
+            <div class="focus-item">
+              <div class="focus-num-title">① {{ item.title }}</div>
+              {% if item.detail %}
+              <div class="focus-sub-text">({{ item.detail }})</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- To Do 카드 -->
+        <div class="todo-card">
+          <div class="card-head">To do (중기 체크포인트)</div>
+          <div class="card-body">
+            {% for todo in todo_items %}
+            <div class="todo-item">
+              <span class="todo-bullet">■</span>
+              <span>{{ todo }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- [컬럼 2] 월~목 일별 캘린더 -->
+      <div class="col-center">
+        {% for day in days_mon_thu %}
+        <div class="day-block">
+          <div class="day-label-col">
+            <span class="day-date">{{ day.date_num }}</span>
+            <span class="day-name">{{ day.day_en }}</span>
+          </div>
+          <div class="day-content-col">
+            {% for ev in day.events %}
+            <div class="event-row">
+              <span class="event-pill cat-{{ ev.category_cls }}">{{ ev.category_name }}</span>
+              <span class="event-text">{{ ev.title }}</span>
+              {% if ev.stars %}
+              <span class="event-star">{{ ev.stars }}</span>
+              {% endif %}
+              {% if ev.detail %}
+              <span class="event-detail">({{ ev.detail }})</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- [컬럼 3] 금요일 + 주요 기업 실적 일정 -->
+      <div class="col-right">
+        <!-- 금요일 블록 -->
+        {% if friday %}
+        <div class="day-block friday-section">
+          <div class="day-label-col">
+            <span class="day-date">{{ friday.date_num }}</span>
+            <span class="day-name">{{ friday.day_en }}</span>
+          </div>
+          <div class="day-content-col">
+            {% for ev in friday.events %}
+            <div class="event-row">
+              <span class="event-pill cat-{{ ev.category_cls }}">{{ ev.category_name }}</span>
+              <span class="event-text">{{ ev.title }}</span>
+              {% if ev.stars %}
+              <span class="event-star">{{ ev.stars }}</span>
+              {% endif %}
+              {% if ev.detail %}
+              <span class="event-detail">({{ ev.detail }})</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- 주요 기업 실적 발표 일정 카드 -->
+        <div class="earnings-section">
+          <div class="earnings-board">
+            <div class="earnings-head">
+              <span class="earnings-title">주요 기업 실적 발표 일정</span>
+              <span class="earnings-sub">B: 장 시작 전 / A: 장 마감 후</span>
+            </div>
+            <div class="earnings-list">
+              {% for co in earnings_schedule %}
+              <div class="earnings-row">
+                <div class="earnings-co">
+                  <span>{{ co.icon }}</span>
+                  <span>{{ co.name }}</span>
+                </div>
+                <div>
+                  <span class="earnings-date-badge">{{ co.date_str }}</span>
+                  <span class="earnings-timing">({{ co.timing }})</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 하단 푸터 -->
+    <div class="footer-bar">
+      <div class="footer-left">{{ branding.name }} {{ branding.title }} · 차주 매크로 & 실적 캘린더</div>
+      <div class="footer-right">출처: Investing.com, Federal Reserve, Bloomberg, EarningsWhisper</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
