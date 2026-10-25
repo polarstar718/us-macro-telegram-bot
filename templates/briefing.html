@@ -465,6 +465,100 @@
       line-height: 1.45;
     }
 
+    /* 공포·탐욕 지수 게이지 바 */
+    .fg-container {
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .fg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .fg-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #64748B;
+    }
+    .fg-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: #FFFFFF;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .fg-bar-track {
+      width: 100%;
+      height: 6px;
+      background: #E2E8F0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .fg-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    /* 시간외 / 실적 속보 배너 */
+    .after-market-box {
+      background: #FEF3C7;
+      border: 1px solid #FDE68A;
+      border-left: 4px solid #D97706;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .after-market-badge {
+      background: #D97706;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .after-market-text {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #92400E;
+      line-height: 1.4;
+    }
+
+    /* 국내 증시 영향 분석 박스 */
+    .k-impact-card {
+      background: rgba(226, 183, 85, 0.12);
+      border: 1px solid rgba(226, 183, 85, 0.35);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+    }
+    .k-impact-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .k-impact-tag {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #E2B755;
+    }
+    .k-impact-sub {
+      font-size: 10.5px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .k-impact-desc {
+      font-size: 12px;
+      color: #F8FAFC;
+      line-height: 1.45;
+      font-weight: 600;
+    }
+
     /* 색상 규격 (한국 증시: 빨간색 상승, 파란색 하락) */
     .up {
       color: #DC2626 !important; /* Red */
@@ -571,6 +665,14 @@
     </div>
     {% endif %}
 
+    <!-- 장 마감 후 실적 / 시간외 거래 속보 (동적 조건부 표시) -->
+    {% if after_market and after_market.has_event %}
+    <div class="after-market-box">
+      <div class="after-market-badge">{{ after_market.title }}</div>
+      <div class="after-market-text">{{ after_market.content }}</div>
+    </div>
+    {% endif %}
+
     <!-- 핵심 보유 종목 포커스: AI 반도체 듀오 (NVDA & AMD) -->
     {% if focus_stocks %}
     <div class="focus-section">
@@ -627,6 +729,20 @@
       <div class="section-card">
         <div>
           <div class="section-title">매크로 핵심 지표</div>
+
+          <!-- CNN 공포·탐욕 지수 (Fear & Greed) 미니 게이지 바 -->
+          {% if fear_greed and fear_greed.score is defined %}
+          <div class="fg-container">
+            <div class="fg-header">
+              <span class="fg-label">공포·탐욕 지수 (Fear & Greed)</span>
+              <span class="fg-badge" style="background-color: {{ fear_greed.color }};">{{ fear_greed.score }}점 · {{ fear_greed.rating_kr }}</span>
+            </div>
+            <div class="fg-bar-track">
+              <div class="fg-bar-fill" style="width: {{ fear_greed.score }}%; background-color: {{ fear_greed.color }};"></div>
+            </div>
+          </div>
+          {% endif %}
+
           <div class="table-list">
             {% for item in macro %}
             <div class="table-row">
@@ -690,6 +806,17 @@
       <!-- 체크포인트 (다크 테마) -->
       <div class="checkpoint-card">
         <div>
+          <!-- 국내 증시 영향 분석 (K-Market Impact) -->
+          {% if ai.k_market_impact %}
+          <div class="k-impact-card">
+            <div class="k-impact-header">
+              <span class="k-impact-tag">🇰🇷 오늘 국내 증시 영향</span>
+              <span class="k-impact-sub">KOSPI · KOSDAQ 전망</span>
+            </div>
+            <div class="k-impact-desc">{{ ai.k_market_impact }}</div>
+          </div>
+          {% endif %}
+
           <div class="checkpoint-title">주요 체크포인트</div>
           <div class="checkpoint-subtitle">한국 시간 기준 · 경제 지표 및 주요 일정</div>
           <div class="checkpoint-list">
