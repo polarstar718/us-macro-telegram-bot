@@ -36,8 +36,10 @@ def render_html(market_data, ai_data, output_html_path="output/briefing.html"):
         primary_indices=primary_indices,
         secondary_indices=secondary_indices,
         macro=market_data.get("macro", []),
+        fear_greed=market_data.get("fear_greed", {}),
         m7=market_data.get("m7", []),
         focus_stocks=market_data.get("focus_stocks", []),
+        after_market=market_data.get("after_market"),
         ai=ai_data
     )
 
