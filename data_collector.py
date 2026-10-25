@@ -147,6 +147,104 @@ def fetch_news_headlines(query="US stock market economy", max_items=5):
         return []
 
 
+def fetch_fear_and_greed_index():
+    """
+    CNN Fear & Greed Index (0~100) 수치 및 상태(Extreme Fear ~ Extreme Greed) 수집
+    """
+    url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
+    rating_kr_map = {
+        "extreme fear": "극도의 공포",
+        "fear": "공포",
+        "neutral": "중립",
+        "greed": "탐욕",
+        "extreme greed": "극도의 탐욕"
+    }
+    color_map = {
+        "extreme fear": "#DC2626", # 짙은 빨강
+        "fear": "#EA580C",        # 주황
+        "neutral": "#64748B",     # 슬레이트
+        "greed": "#16A34A",       # 초록
+        "extreme greed": "#059669"# 에메랄드
+    }
+    try:
+        import requests
+        res = requests.get(url, headers=headers, timeout=6)
+        if res.status_code == 200:
+            data = res.json()
+            fg = data.get("fear_and_greed", {})
+            score = round(float(fg.get("score", 50)))
+            rating = str(fg.get("rating", "neutral")).lower()
+            prev_close = round(float(fg.get("previous_close", score)))
+            rating_kr = rating_kr_map.get(rating, "중립")
+            color = color_map.get(rating, "#64748B")
+
+            return {
+                "score": score,
+                "rating": rating.title(),
+                "rating_kr": rating_kr,
+                "color": color,
+                "prev_close": prev_close,
+                "status_text": f"{score}점 · {rating_kr}"
+            }
+        else:
+            raise RuntimeError(f"HTTP {res.status_code}")
+    except Exception as e:
+        logger.warning(f"CNN Fear & Greed 지수 수집 실패 ({e}), 안전 기본값 사용")
+        return {
+            "score": 50,
+            "rating": "Neutral",
+            "rating_kr": "중립",
+            "color": "#64748B",
+            "prev_close": 50,
+            "status_text": "50점 · 중립"
+        }
+
+
+def fetch_after_market_news(watch_tickers=None):
+    """
+    실적 발표 기간 주요 종목(M7, 반도체 등)의 시간외 거래 등락률 또는 주요 어닝 속보 확인
+    유의미한 변동(±1.8% 이상)이 있을 때만 조건부 반환
+    """
+    if not watch_tickers:
+        watch_tickers = ["NVDA", "AMD", "TSLA", "AAPL", "MSFT", "GOOGL", "AMZN", "META"]
+
+    notable_moves = []
+    try:
+        for ticker_symbol in watch_tickers[:5]:  # 빠른 응답을 위해 상위 5개 우선 점검
+            t = yf.Ticker(ticker_symbol)
+            info = t.info or {}
+            post_price = info.get("postMarketPrice")
+            post_pct = info.get("postMarketChangePercent")
+
+            if post_price and post_pct is not None and abs(post_pct) >= 0.018:
+                pct_val = post_pct * 100
+                cls = "up" if pct_val > 0 else "down"
+                sign = "+" if pct_val > 0 else ""
+                notable_moves.append({
+                    "ticker": ticker_symbol,
+                    "price": f"${post_price:,.2f}",
+                    "pct_str": f"{sign}{pct_val:.2f}%",
+                    "cls": cls,
+                    "text": f"{ticker_symbol} 시간외 {sign}{pct_val:.2f}% (${post_price:,.2f})"
+                })
+    except Exception as e:
+        logger.debug(f"시간외 거래 조회 중 예외 ({e})")
+
+    if notable_moves:
+        combined_text = " · ".join([m["text"] for m in notable_moves[:2]])
+        return {
+            "has_event": True,
+            "title": "⚡ 장 마감 후 실적 / 시간외 속보",
+            "content": combined_text,
+            "items": notable_moves
+        }
+    return None
+
+
 def collect_all_market_data(config_path="config.json"):
     """
     설정 파일(config.json)에 정의된 모든 지수, 매크로, 빅테크 종목 데이터 일괄 수집
@@ -250,12 +348,20 @@ def collect_all_market_data(config_path="config.json"):
     semicon_news = fetch_news_headlines("Nvidia AMD semiconductor AI chips", max_items=3)
     news.extend(semicon_news)
 
+    logger.info("CNN Fear & Greed 공포·탐욕 지수 수집 중...")
+    fear_greed = fetch_fear_and_greed_index()
+
+    logger.info("장 마감 후 시간외 거래(After-market) 및 어닝 점검 중...")
+    after_market = fetch_after_market_news(["NVDA", "AMD", "TSLA", "AAPL", "MSFT"])
+
     return {
         "date_str": date_str,
         "indices": indices_data,
         "macro": macro_data,
+        "fear_greed": fear_greed,
         "focus_stocks": focus_data,
         "m7": m7_data,
+        "after_market": after_market,
         "news": news,
         "config": config
     }
