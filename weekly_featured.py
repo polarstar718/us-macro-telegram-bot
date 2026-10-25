@@ -55,6 +55,53 @@ WATCH_TICKERS = {
     "COST": "코스트코"
 }
 
+SECTOR_ETFS = {
+    "XLK": "기술",
+    "XLC": "통신",
+    "XLY": "소비재",
+    "XLP": "필수재",
+    "XLE": "에너지",
+    "XLF": "금융",
+    "XLV": "헬스케어",
+    "XLI": "산업재",
+    "XLB": "소재",
+    "XLRE": "부동산",
+    "XLU": "유틸리티"
+}
+
+
+def fetch_sp500_sector_returns():
+    """
+    S&P 500 11개 섹터 ETF 주간 등락률 및 순위 수집
+    """
+    logger.info("S&P 500 11개 섹터 ETF 주간 등락률 및 순위 수집 중...")
+    sectors = list(SECTOR_ETFS.keys())
+    try:
+        df = yf.download(sectors, period="1mo", interval="1d", progress=False)['Close']
+        results = []
+        for s in sectors:
+            if s in df.columns:
+                series = df[s].dropna()
+                if len(series) >= 2:
+                    curr = float(series.iloc[-1])
+                    prev_idx = -5 if len(series) >= 5 else 0
+                    prev = float(series.iloc[prev_idx])
+                    pct = ((curr - prev) / prev) * 100
+                    cls = "up" if pct > 0 else "down" if pct < 0 else "neutral"
+                    sign = "+" if pct > 0 else ""
+                    results.append({
+                        "ticker": s,
+                        "name": SECTOR_ETFS[s],
+                        "pct": pct,
+                        "pct_str": f"{sign}{pct:.1f}%",
+                        "cls": cls
+                    })
+        results.sort(key=lambda x: x["pct"], reverse=True)
+        return results
+    except Exception as e:
+        logger.warning(f"섹터 등락률 수집 실패 ({e})")
+        return []
+
 
 def fetch_weekly_ticker_returns():
     """
@@ -125,7 +172,11 @@ def generate_weekly_ai_analysis(ticker_data):
    - bullets: 주요 원인 키워드나 요인 (예: "① 코어위브 ② 빅테크 캡엑스 ③ 엔비디아-AMD 경쟁 등", 없으면 빈 문자열)
    - groups: 세부 섹터별 종목 리스트 (label 및 items: [ticker, pct_str, cls])
      - cls는 상승이면 "up", 하락이면 "down"
-3. 반드시 순수 JSON만 반환할 것 (추가 설명이나 마크다운 백틱 금지)
+3. "momentum_leaders" 배열 (주간 52주 신고가 경신 또는 강력한 주도주 3개):
+   - name: 종목/자산명 (예: "엔비디아 (NVDA)", "비트코인 (BTC)", "월마트 (WMT)" 등)
+   - badge: 배지 텍스트 (예: "52주 신고가", "신고가권 모멘텀", "수급 집중" 등)
+   - desc: 한 줄 요약 이유 (15~25자 내외)
+4. 반드시 순수 JSON만 반환할 것 (추가 설명이나 마크다운 백틱 금지)
 
 [JSON 형식]
 {{
@@ -225,6 +276,11 @@ def generate_weekly_ai_analysis(ticker_data):
         }}
       ]
     }}
+  ],
+  "momentum_leaders": [
+    {{"name": "엔비디아 (NVDA)", "badge": "52주 신고가권", "desc": "차세대 블랙웰 공급 기대감 및 빅테크 AI 수요 지속"}},
+    {{"name": "비트코인 (BTC)", "badge": "주간 모멘텀", "desc": "반감기 후 기관 자금 순유입 가속화 및 위험선호 개선"}},
+    {{"name": "월마트 (WMT)", "badge": "52주 신고가", "desc": "소비 둔화 속 필수소비재 점유율 확대 및 실적 호조"}}
   ]
 }}
 """
@@ -367,13 +423,18 @@ def get_default_weekly_data(ticker_data, date_range):
             }
         ]
     }
+    default_data["momentum_leaders"] = [
+        {"name": "엔비디아 (NVDA)", "badge": "52주 신고가권", "desc": "차세대 블랙웰 공급 기대감 및 빅테크 AI 수요 지속"},
+        {"name": "비트코인 (BTC)", "badge": "주간 모멘텀", "desc": "반감기 후 기관 자금 순유입 가속화 및 위험선호 개선"},
+        {"name": "월마트 (WMT)", "badge": "52주 신고가", "desc": "소비 둔화 속 필수소비재 점유율 확대 및 실적 호조"}
+    ]
     for row in default_data["rows"]:
         for group in row["groups"]:
             group["stocks"] = group["items"]
     return default_data
 
 
-def render_weekly_featured_image(data, date_range, output_png="output/weekly_featured.png"):
+def render_weekly_featured_image(data, date_range, output_png="output/weekly_featured.png", sector_rankings=None):
     """
     HTML 템플릿에 데이터 바인딩 후 Edge/Playwright로 PNG 렌더링
     """
@@ -390,6 +451,8 @@ def render_weekly_featured_image(data, date_range, output_png="output/weekly_fea
     rendered_html = template.render(
         date_range=date_range,
         rows=data.get("rows", []),
+        momentum_leaders=data.get("momentum_leaders", []),
+        sector_rankings=sector_rankings,
         branding=config.get("branding", {})
     )
 
@@ -502,19 +565,29 @@ def send_weekly_to_telegram(image_path, data, date_range, heatmap_path="output/w
         hl = r.get("highlight", "")
         summary_lines.append(f"• {emoji} *{cat}*: {hl}")
 
+    momentum_lines = []
+    for m in data.get("momentum_leaders", [])[:3]:
+        momentum_lines.append(f"• *{m.get('name', '')}* ({m.get('badge', '')}): {m.get('desc', '')}")
+
+    momentum_block = ""
+    if momentum_lines:
+        momentum_block = "\n🔥 *주간 주도주 & 신고가 트렌드*\n" + "\n".join(momentum_lines) + "\n"
+
     caption = f"""🗓 *[주간 결산 1/2] 미국 증시 특징주 & S&P 500 히트맵*
 📅 *기준 주간*: {date_range}
 
 📌 *4대 핵심 테마주 주간 결산*
 {chr(10).join(summary_lines)}
-
+{momentum_block}
 🗺 *S&P 500 주간(1-Week) 히트맵 가이드*
 • 🟢 *초록(Green)*: 주간 상승 섹터 (월가 글로벌 표준)
 • 🔴 *빨강(Red)*: 주간 하락 및 차익실현 섹터
 • ⚡ *NVDA & AMD*: 핵심 보유주 섹터 주간 수급 및 밸류에이션 점검
 
-_※ 사진 1: 4대 테마별 주간 특징주 요약표_
-_※ 사진 2: Finviz S&P 500 주간 전종목 히트맵_"""
+#미국증시 #주간특징주 #NVDA #AMD #히트맵 #섹터순위"""
+
+    if len(caption) > 1020:
+        caption = caption[:1015] + "..."
 
     # 이미지 바이트 미리 로드
     with open(image_path, "rb") as f1:
@@ -609,15 +682,16 @@ def main():
     logger.info("📊 미국 증시 주간 특징주 & 히트맵 파이프라인 시작")
     logger.info("==========================================")
 
-    # 1. 티커 데이터 수집
+    # 1. 티커 데이터 및 11개 섹터 주간 등락률 수집
     ticker_data = fetch_weekly_ticker_returns()
+    sector_rankings = fetch_sp500_sector_returns()
 
     # 2. Gemini AI 주간 분석
     data, date_range = generate_weekly_ai_analysis(ticker_data)
 
     # 3. 고화질 특징주 이미지 렌더링
     output_png = "output/weekly_featured.png"
-    render_weekly_featured_image(data, date_range, output_png)
+    render_weekly_featured_image(data, date_range, output_png, sector_rankings=sector_rankings)
 
     # 4. S&P 500 주간 히트맵 캡처
     heatmap_png = "output/weekly_heatmap.png"
