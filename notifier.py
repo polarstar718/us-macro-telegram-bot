@@ -15,62 +15,77 @@ logger = logging.getLogger(__name__)
 
 def build_telegram_caption(market_data, ai_data, has_heatmap=True):
     """
-    텔레그램 메시지 본문용 마크다운 서식 캡션 생성
+    텔레그램 메시지 본문용 마크다운 서식 캡션 생성 (1,024자 이내 안전 제한 및 검색 최적화)
+    - 💡 오늘의 판단
+    - 📌 핵심 3줄 요약 (지수 동향, 매크로/환율/공포탐욕, 국내 증시 영향)
+    - 🎯 핵심 보유주 (NVDA & AMD) 한 줄 점검
+    - 🏷️ 주요 해시태그/티커
     """
     date_str = market_data.get("date_str", "")
     headline = ai_data.get("headline", "")
+    k_impact = ai_data.get("k_market_impact", "")
+    fg = market_data.get("fear_greed", {})
+    fg_text = f"{fg.get('score', '')}점({fg.get('rating_kr', '')})" if fg else ""
 
-    # 주요 지수 등락 요약
+    # 1. 지수 요약
     indices = market_data.get("indices", [])
-    indices_summary = []
-    for item in indices[:4]:
-        name = item.get("name")
-        price = item.get("price")
-        pct = item.get("pct_str")
-        symbol = item.get("symbol", "")
-        indices_summary.append(f"• *{name}*: {price} ({symbol} {pct})")
+    sp500 = next((i for i in indices if "S&P" in i.get("name", "")), None)
+    nasdaq = next((i for i in indices if "나스닥" in i.get("name", "")), None)
+    sox = next((i for i in indices if "반도체" in i.get("name", "")), None)
+    idx_parts = []
+    if sp500: idx_parts.append(f"S&P500 {sp500['symbol']}{sp500['pct_str']}")
+    if nasdaq: idx_parts.append(f"나스닥 {nasdaq['symbol']}{nasdaq['pct_str']}")
+    if sox: idx_parts.append(f"필라반도체 {sox['symbol']}{sox['pct_str']}")
+    idx_line = " · ".join(idx_parts) if idx_parts else "지수 데이터 수집 완료"
 
-    # 3대 분석 포인트 제목 요약
-    reasons = ai_data.get("reasons", [])
-    reasons_summary = []
-    emojis = ["1️⃣", "2️⃣", "3️⃣"]
-    for i, r in enumerate(reasons[:3]):
-        reasons_summary.append(f"{emojis[i]} *{r.get('title')}*")
+    # 2. 매크로 요약
+    macro = market_data.get("macro", [])
+    us10y = next((m for m in macro if "10년물" in m.get("name", "")), None)
+    usdkrw = next((m for m in macro if "환율" in m.get("name", "")), None)
+    macro_parts = []
+    if us10y: macro_parts.append(f"10년물 {us10y['price']}({us10y['change_str']})")
+    if usdkrw: macro_parts.append(f"환율 {usdkrw['price']}")
+    if fg_text: macro_parts.append(f"공포·탐욕 {fg_text}")
+    macro_line = " · ".join(macro_parts) if macro_parts else "매크로 지표 확인"
 
-    # 핵심 보유 종목(NVDA, AMD) 요약
+    # 3. 핵심 보유 종목(NVDA, AMD) 요약
     focus_stocks = market_data.get("focus_stocks", [])
-    focus_analysis = ai_data.get("focus_analysis", {})
-    focus_summary = []
+    focus_parts = []
     for s in focus_stocks:
         ticker = s.get("ticker", "")
-        name = s.get("name", "")
         price = s.get("price", "")
         pct = s.get("pct_str", "")
         symbol = s.get("symbol", "")
-        key = "nvda" if ticker == "NVDA" else "amd"
-        icon = "🟢" if ticker == "NVDA" else "🔴"
-        fa = focus_analysis.get(key, {})
-        title = fa.get("title", "")
-        focus_summary.append(f"{icon} *{name} ({ticker})*: {price} ({symbol} {pct})\n   ↳ _{title}_")
+        icon = "🟢" if symbol == "▲" else "🔴" if symbol == "▼" else "⚪"
+        focus_parts.append(f"{icon} *{ticker}* {price} ({symbol}{pct})")
+    focus_line = "   ".join(focus_parts)
 
-    heatmap_guide = "\n🗺 *첨부 2*: S&P 500 일간 등락 히트맵 (Finviz 1-Day)" if has_heatmap else ""
+    # 4. 해시태그 목록
+    hashtags = "#미국증시 #NVDA #AMD #나스닥 #환율 #국내장영향 #SOX #공포탐욕지수"
 
-    caption = f"""📊 *미국 증시 데일리 매크로 브리핑*
-🗓 *기준*: {date_str}
+    # 캡션 조합
+    caption_parts = [
+        "📊 *미국 증시 데일리 매크로 브리핑*",
+        f"🗓 *기준*: {date_str}\n",
+        "💡 *오늘의 판단*",
+        f"\"{headline}\"\n",
+        "📌 *핵심 요약 3줄*",
+        f"1️⃣ *지수 동향*: {idx_line}",
+        f"2️⃣ *매크로/환율*: {macro_line}",
+        f"3️⃣ *국내 증시 영향*: {k_impact}\n",
+        "🎯 *핵심 보유주 집중 점검 (AI 반도체)*",
+        f"{focus_line}\n",
+        hashtags
+    ]
 
-💡 *오늘의 판단*
-"{headline}"
+    if has_heatmap:
+        caption_parts.append("\n_※ 사진 1: 인포그래픽 카드 | 사진 2: S&P 500 일간 히트맵_")
 
-🎯 *핵심 보유주 집중 점검 (AI 반도체)*
-{chr(10).join(focus_summary)}
+    caption = "\n".join(caption_parts)
 
-📈 *주요 지수 동향*
-{chr(10).join(indices_summary)}
-
-🔍 *왜 이렇게 판단했나 (핵심 3대 포인트)*
-{chr(10).join(reasons_summary)}
-
-_※ 상세 인포그래픽 수치 및 심층 분석은 위 카드를 확인하세요!_{heatmap_guide}"""
+    # 텔레그램 캡션 길이 1,024자 제한 안전 처리
+    if len(caption) > 1020:
+        caption = caption[:1015] + "..."
 
     return caption
 
@@ -174,7 +189,6 @@ def send_briefing_to_telegram(image_path="output/briefing.png", market_data=None
 
     logger.info(f"🎉 데일리 브리핑: 총 {len(subscribers)}명 중 {success_count}명 발송 완료")
     return success_count > 0
-        return False
 
 
 if __name__ == "__main__":
