@@ -285,12 +285,17 @@ def generate_weekly_ai_analysis(ticker_data):
 }}
 """
 
-    models_to_try = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]
+    models_to_try = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-lite-latest"
+    ]
     for model_name in models_to_try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.4}
+            "generationConfig": {"temperature": 0.25}
         }
         try:
             res = requests.post(url, json=payload, timeout=25)
@@ -299,15 +304,24 @@ def generate_weekly_ai_analysis(ticker_data):
                 text = result["candidates"][0]["content"]["parts"][0]["text"]
                 text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
                 text = re.sub(r"```$", "", text.strip(), flags=re.MULTILINE)
+                match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+                if match:
+                    text = match.group(0)
                 data = json.loads(text)
+                # [팩트체크 가드레일] 모든 종목 등락률을 yfinance 실측 데이터로 100% 강제 동기화
                 for row in data.get("rows", []):
                     for group in row.get("groups", []):
                         if "items" in group:
+                            for st in group["items"]:
+                                sym = st.get("ticker", "").upper()
+                                if sym in ticker_data:
+                                    st["pct_str"] = ticker_data[sym]["pct_str"]
+                                    st["cls"] = ticker_data[sym]["cls"]
                             group["stocks"] = group["items"]
-                logger.info(f"Gemini AI ({model_name}) 주간 특징주 생성 성공! 🎉")
+                logger.info(f"Gemini AI ({model_name}) 주간 특징주 생성 및 실측 수익률 교차검증 성공! 🎉")
                 return data, date_range
         except Exception as ex:
-            logger.warning(f"Gemini 주간 특징주 생성 중 오류: {ex}")
+            logger.warning(f"Gemini 주간 특징주 생성 중 오류 ({model_name}): {ex}")
 
     return fallback, date_range
 
