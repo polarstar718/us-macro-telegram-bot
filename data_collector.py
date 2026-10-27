@@ -126,7 +126,7 @@ def fetch_ticker_data(ticker_symbol, is_yield=False):
 
 def fetch_news_headlines(query="US stock market economy", max_items=5):
     """
-    Google News RSS를 통해 오늘 미국 증시의 주요 헤드라인 뉴스 수집
+    Google News RSS를 통해 오늘 미국 증시의 주요 헤드라인 뉴스 수집 (출처 포함)
     """
     try:
         encoded_query = urllib.parse.quote(query)
@@ -140,11 +140,83 @@ def fetch_news_headlines(query="US stock market economy", max_items=5):
         for item in root.findall(".//item")[:max_items]:
             title = item.find("title").text if item.find("title") is not None else ""
             pub_date = item.find("pubDate").text if item.find("pubDate") is not None else ""
-            items.append({"title": title, "published": pub_date})
+            source = item.find("source").text if item.find("source") is not None else "Financial Media"
+            items.append({"title": title, "published": pub_date, "source": source})
         return items
     except Exception as e:
-        logger.warning(f"뉴스 수집 실패: {e}")
+        logger.warning(f"뉴스 수집 실패 ({query}): {e}")
         return []
+
+
+def fetch_expert_market_opinions():
+    """
+    월가 주요 투자은행(IB), 애널리스트, 글로벌 경제 매체의 최신 시장 진단 및 전문가 의견 다중 수집
+    """
+    queries = [
+        ("Wall Street strategist stock market S&P 500 Nasdaq Goldman Morgan Stanley JPMorgan Citi BofA when:2d", 5),
+        ("US stock market close today S&P 500 Dow Nasdaq rally drop why when:1d", 5),
+        ("Nvidia NVDA AMD AI chips analyst target price Wall Street commentary when:3d", 5),
+        ("Federal Reserve Treasury yields inflation dollar market impact Reuters Bloomberg CNBC MarketWatch when:2d", 4),
+    ]
+    seen_titles = set()
+    opinions = []
+    for q, limit in queries:
+        for item in fetch_news_headlines(q, max_items=limit):
+            title = item.get("title", "").strip()
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                opinions.append(item)
+    return opinions
+
+
+def fetch_verified_upcoming_earnings(tickers=None):
+    """
+    yfinance Ticker.calendar를 통해 주요 빅테크/반도체 기업의 실제 확정(또는 컨센서스) 실적 발표일과 예상 EPS/매출 조회
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not tickers:
+        tickers = [
+            ("NVDA", "엔비디아"), ("AMD", "AMD"), ("MSFT", "마이크로소프트"),
+            ("GOOGL", "알파벳(구글)"), ("AMZN", "아마존"), ("AAPL", "애플"),
+            ("META", "메타"), ("TSLA", "테슬라"), ("AVGO", "브로드컴"),
+            ("MU", "마이크론"), ("INTC", "인텔"), ("ARM", "ARM")
+        ]
+
+    def _fetch_one(pair):
+        sym, kr_name = pair
+        try:
+            t = yf.Ticker(sym)
+            cal = t.calendar or {}
+            edates = cal.get("Earnings Date", [])
+            edate = edates[0] if edates else None
+            eps_avg = cal.get("Earnings Average")
+            rev_avg = cal.get("Revenue Average")
+
+            eps_str = f"${float(eps_avg):.2f}" if eps_avg is not None else "N/A"
+            if rev_avg is not None:
+                rev_val = float(rev_avg)
+                rev_str = f"${rev_val / 1e9:.1f}B" if rev_val >= 1e9 else f"${rev_val / 1e6:.0f}M"
+            else:
+                rev_str = "N/A"
+
+            return {
+                "ticker": sym,
+                "name": kr_name,
+                "earnings_date": edate.strftime("%Y-%m-%d") if edate else "미정",
+                "consensus_eps": eps_str,
+                "consensus_rev": rev_str
+            }
+        except Exception as e:
+            logger.debug(f"실적 일정 조회 실패 ({sym}): {e}")
+            return None
+
+    results = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for res in ex.map(_fetch_one, tickers):
+            if res:
+                results.append(res)
+    return results
 
 
 def fetch_fear_and_greed_index():
@@ -206,39 +278,135 @@ def fetch_fear_and_greed_index():
 
 def fetch_after_market_news(watch_tickers=None):
     """
-    실적 발표 기간 주요 종목(M7, 반도체 등)의 시간외 거래 등락률 또는 주요 어닝 속보 확인
-    유의미한 변동(±1.8% 이상)이 있을 때만 조건부 반환
+    M7 및 주요 반도체 종목의 장 마감 후 실적 발표 및 시간외 거래(After-market) 팩트체크
+    [표시 기준]
+    1. 실적 발표 여부와 무관하게 시간외 등락률이 ±5.0% 이상인 종목
+    2. 최근 마감된 거래일(또는 당일)에 분기 실적(Earnings)을 발표한 종목 (±5% 미만이어도 표시)
+    [검증 방식]
+    - yfinance의 postMarketChangePercent 단위 오류 방지를 위해 (시간외현재가 - 정규장종가) / 정규장종가 * 100 으로 직접 계산
+    - postMarketChangePercent 원시값 및 타임스탬프(postMarketTime >= regularMarketTime)와 교차 검증 수행
     """
-    if not watch_tickers:
-        watch_tickers = ["NVDA", "AMD", "TSLA", "AAPL", "MSFT", "GOOGL", "AMZN", "META"]
+    from concurrent.futures import ThreadPoolExecutor
 
-    notable_moves = []
-    try:
-        for ticker_symbol in watch_tickers[:5]:  # 빠른 응답을 위해 상위 5개 우선 점검
+    if not watch_tickers:
+        watch_tickers = [
+            "NVDA", "AMD", "MSFT", "AAPL", "GOOGL", "AMZN", "META", "TSLA",
+            "AVGO", "MU", "INTC", "ARM", "TSM", "QCOM"
+        ]
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    recent_dates = {
+        (now_utc - datetime.timedelta(days=d)).date()
+        for d in range(0, 2)
+    }
+
+    def _check_ticker(ticker_symbol):
+        try:
             t = yf.Ticker(ticker_symbol)
             info = t.info or {}
-            post_price = info.get("postMarketPrice")
-            post_pct = info.get("postMarketChangePercent")
+            cal = t.calendar or {}
 
-            if post_price and post_pct is not None and abs(post_pct) >= 0.018:
-                pct_val = post_pct * 100
-                cls = "up" if pct_val > 0 else "down"
-                sign = "+" if pct_val > 0 else ""
-                notable_moves.append({
+            # 1) 분기 실적 발표일 여부 확인 (yfinance calendar 기준)
+            edates = cal.get("Earnings Date", [])
+            is_earnings_today = any(ed in recent_dates for ed in edates if isinstance(ed, datetime.date))
+
+            # 2) 정규장 종가 및 시간외 현재가 조회
+            reg_price = info.get("regularMarketPrice") or info.get("currentPrice")
+            post_price = info.get("postMarketPrice")
+            reg_time = info.get("regularMarketTime")
+            post_time = info.get("postMarketTime")
+            raw_post_pct = info.get("postMarketChangePercent")
+
+            # 시간외 가격이 유효하고 최신 세션 데이터인지 타임스탬프 검증
+            has_valid_post = False
+            direct_pct = 0.0
+            if post_price and reg_price and float(reg_price) > 0:
+                post_price_f = float(post_price)
+                reg_price_f = float(reg_price)
+                # (시간외 현재가 - 정규장 종가)로 직접 등락률(%) 계산
+                direct_pct = ((post_price_f - reg_price_f) / reg_price_f) * 100.0
+
+                # 타임스탬프 신선도 검증 (post_time이 reg_time 이후이고 36시간 이내인지)
+                is_fresh = True
+                if post_time and reg_time:
+                    if post_time < reg_time or (now_utc.timestamp() - post_time) > 36 * 3600:
+                        is_fresh = False
+
+                # raw_post_pct와 교차 검증 (yfinance는 이미 % 단위이거나 소수점일 수 있으므로 둘 다 대조)
+                if raw_post_pct is not None:
+                    raw_f = float(raw_post_pct)
+                    # raw_f 자체가 direct_pct와 가깝거나, raw_f*100이 direct_pct와 가까우면 통과
+                    diff_as_pct = abs(raw_f - direct_pct)
+                    diff_as_dec = abs((raw_f * 100.0) - direct_pct)
+                    if min(diff_as_pct, diff_as_dec) > 1.0:
+                        logger.warning(
+                            f"[{ticker_symbol}] 시간외 등락률 교차검증 불일치 (직접계산={direct_pct:.2f}%, raw={raw_f}) -> 직접계산값 사용"
+                        )
+
+                if is_fresh and abs(direct_pct) < 50.0:
+                    has_valid_post = True
+
+            # 조건 1: 시간외 ±5.0% 이상 변동
+            if has_valid_post and abs(direct_pct) >= 5.0:
+                cls = "up" if direct_pct > 0 else "down"
+                sign = "+" if direct_pct > 0 else ""
+                tag_prefix = "실적·시간외" if is_earnings_today else "시간외 급변동"
+                return {
                     "ticker": ticker_symbol,
-                    "price": f"${post_price:,.2f}",
-                    "pct_str": f"{sign}{pct_val:.2f}%",
+                    "price": f"${float(post_price):,.2f}",
+                    "reg_price": f"${float(reg_price):,.2f}",
+                    "pct": round(direct_pct, 2),
+                    "pct_str": f"{sign}{direct_pct:.2f}%",
                     "cls": cls,
-                    "text": f"{ticker_symbol} 시간외 {sign}{pct_val:.2f}% (${post_price:,.2f})"
-                })
-    except Exception as e:
-        logger.debug(f"시간외 거래 조회 중 예외 ({e})")
+                    "is_earnings": is_earnings_today,
+                    "text": f"{ticker_symbol} ({tag_prefix}) {sign}{direct_pct:.2f}% (정규 ${float(reg_price):,.2f} → 시간외 ${float(post_price):,.2f})"
+                }
+
+            # 조건 2: 분기 실적 발표일인 종목 (±5% 미만 변동이어도 표기)
+            if is_earnings_today:
+                if has_valid_post:
+                    cls = "up" if direct_pct > 0 else "down" if direct_pct < 0 else "neutral"
+                    sign = "+" if direct_pct > 0 else ""
+                    return {
+                        "ticker": ticker_symbol,
+                        "price": f"${float(post_price):,.2f}",
+                        "reg_price": f"${float(reg_price):,.2f}",
+                        "pct": round(direct_pct, 2),
+                        "pct_str": f"{sign}{direct_pct:.2f}%",
+                        "cls": cls,
+                        "is_earnings": True,
+                        "text": f"{ticker_symbol} [분기실적 발표] 시간외 {sign}{direct_pct:.2f}% (${float(post_price):,.2f})"
+                    }
+                elif reg_price:
+                    eps_est = cal.get("Earnings Average")
+                    eps_txt = f" (컨센서스 EPS ${float(eps_est):.2f})" if eps_est is not None else ""
+                    return {
+                        "ticker": ticker_symbol,
+                        "price": f"${float(reg_price):,.2f}",
+                        "reg_price": f"${float(reg_price):,.2f}",
+                        "pct": 0.0,
+                        "pct_str": "실적발표",
+                        "cls": "neutral",
+                        "is_earnings": True,
+                        "text": f"{ticker_symbol} [분기실적 발표일] 종가 ${float(reg_price):,.2f}{eps_txt}"
+                    }
+        except Exception as e:
+            logger.debug(f"시간외 거래/실적 조회 중 예외 ({ticker_symbol}): {e}")
+        return None
+
+    notable_moves = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for item in ex.map(_check_ticker, watch_tickers):
+            if item:
+                notable_moves.append(item)
 
     if notable_moves:
-        combined_text = " · ".join([m["text"] for m in notable_moves[:2]])
+        # 변동폭 절대값 큰 순서 + 실적 발표 우선 정렬
+        notable_moves.sort(key=lambda x: (x.get("is_earnings", False), abs(x.get("pct", 0.0))), reverse=True)
+        combined_text = " · ".join([m["text"] for m in notable_moves[:3]])
         return {
             "has_event": True,
-            "title": "⚡ 장 마감 후 실적 / 시간외 속보",
+            "title": "⚡ 장 마감 후 실적 / 시간외 속보 (교차검증 완료)",
             "content": combined_text,
             "items": notable_moves
         }
@@ -343,16 +511,17 @@ def collect_all_market_data(config_path="config.json"):
                 "cls": data["change"]["cls"]
             })
 
-    logger.info("최신 미국 증시 및 반도체 뉴스 헤드라인 수집 중...")
-    news = fetch_news_headlines("US stock market economy", max_items=4)
-    semicon_news = fetch_news_headlines("Nvidia AMD semiconductor AI chips", max_items=3)
-    news.extend(semicon_news)
+    logger.info("최신 미국 증시, 반도체 뉴스 및 월가 전문가(IB·애널리스트) 의견 수집 중...")
+    news = fetch_expert_market_opinions()
+
+    logger.info("주요 빅테크 및 반도체 확정 실적 발표 일정(yfinance) 검증 중...")
+    verified_earnings = fetch_verified_upcoming_earnings()
 
     logger.info("CNN Fear & Greed 공포·탐욕 지수 수집 중...")
     fear_greed = fetch_fear_and_greed_index()
 
-    logger.info("장 마감 후 시간외 거래(After-market) 및 어닝 점검 중...")
-    after_market = fetch_after_market_news(["NVDA", "AMD", "TSLA", "AAPL", "MSFT"])
+    logger.info("장 마감 후 시간외 거래(After-market ±5% 기준) 및 당일 분기실적 팩트체크 중...")
+    after_market = fetch_after_market_news()
 
     return {
         "date_str": date_str,
@@ -362,6 +531,7 @@ def collect_all_market_data(config_path="config.json"):
         "focus_stocks": focus_data,
         "m7": m7_data,
         "after_market": after_market,
+        "verified_earnings": verified_earnings,
         "news": news,
         "config": config
     }
