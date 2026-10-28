@@ -413,6 +413,106 @@ def fetch_after_market_news(watch_tickers=None):
     return None
 
 
+def fetch_us_earnings_calls(watch_list=None):
+    """
+    최근 마감 세션(당일/전일)에 실적 발표 및 어닝콜을 진행한 미국 시총 상위 빅테크·반도체 기업을 감지하고,
+    분기 재무제표(YoY·QoQ 비교 기준), 컨센서스(EPS·매출), 어닝콜 가이던스 뉴스를 수집
+    """
+    import urllib.parse
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    if not watch_list:
+        watch_list = [
+            ("NVDA", "엔비디아"), ("AMD", "AMD"), ("MSFT", "마이크로소프트"),
+            ("AAPL", "애플"), ("GOOGL", "알파벳(구글)"), ("AMZN", "아마존"),
+            ("META", "메타"), ("TSLA", "테슬라"), ("AVGO", "브로드컴"),
+            ("MU", "마이크론"), ("INTC", "인텔"), ("ARM", "ARM"),
+            ("TSM", "TSMC"), ("LLY", "일라이릴리")
+        ]
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    recent_dates = {
+        (now_utc - datetime.timedelta(days=d)).date()
+        for d in range(0, 2)
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    }
+
+    earnings_calls = []
+    for sym, kr_name in watch_list:
+        try:
+            t = yf.Ticker(sym)
+            cal = t.calendar or {}
+            edates = cal.get("Earnings Date", [])
+            matched_dates = [ed for ed in edates if isinstance(ed, datetime.date) and ed in recent_dates]
+            if not matched_dates:
+                continue
+
+            eps_avg = cal.get("Earnings Average")
+            rev_avg = cal.get("Revenue Average")
+            cons_eps = f"${float(eps_avg):.2f}" if eps_avg is not None else "N/A"
+            cons_rev = f"${float(rev_avg) / 1e9:.2f}B" if rev_avg is not None else "N/A"
+
+            # 분기 손익계산서(YoY/QoQ 기준점) 조회
+            hist_quarters = {}
+            try:
+                q_stmt = t.quarterly_income_stmt
+                if q_stmt is not None and not q_stmt.empty:
+                    for col in list(q_stmt.columns)[:5]:
+                        col_key = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
+                        col_dict = {}
+                        for metric in ["Total Revenue", "Operating Income", "Net Income", "Diluted EPS"]:
+                            if metric in q_stmt.index:
+                                val = q_stmt.loc[metric, col]
+                                if val is not None and str(val) != "nan":
+                                    if metric == "Diluted EPS":
+                                        col_dict[metric] = f"${float(val):.2f}"
+                                    else:
+                                        col_dict[metric] = f"${float(val) / 1e9:.2f}B"
+                        if col_dict:
+                            hist_quarters[col_key] = col_dict
+            except Exception as qe:
+                logger.debug(f"분기 손익계산서 조회 실패 ({sym}): {qe}")
+
+            # 어닝콜 및 실적(YoY/QoQ) 뉴스 헤드라인 수집 (영문 + 국문)
+            headlines = []
+            seen = set()
+            rss_urls = [
+                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{sym} earnings call revenue EPS YoY guidance when:2d')}&hl=en-US&gl=US&ceid=US:en",
+                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{kr_name} 실적 매출 EPS 어닝콜 가이던스')}&hl=ko&gl=KR&ceid=KR:ko"
+            ]
+            for r_url in rss_urls:
+                try:
+                    req = urllib.request.Request(r_url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=8) as resp:
+                        root = ET.fromstring(resp.read())
+                    for item in root.findall(".//item")[:5]:
+                        title = (item.findtext("title") or "").strip()
+                        if title and title not in seen:
+                            seen.add(title)
+                            headlines.append(title)
+                except Exception:
+                    pass
+
+            earnings_calls.append({
+                "ticker": sym,
+                "name": kr_name,
+                "earnings_date": matched_dates[0].strftime("%Y-%m-%d"),
+                "consensus_eps": cons_eps,
+                "consensus_rev": cons_rev,
+                "historical_quarters": hist_quarters,
+                "earnings_call_news": headlines[:10]
+            })
+            logger.info(f"🎙️ 미 증시 당일 어닝콜/실적발표 감지: {kr_name}({sym})")
+        except Exception as e:
+            logger.debug(f"미 증시 어닝콜 감지 중 예외 ({sym}): {e}")
+
+    return earnings_calls
+
+
 def collect_all_market_data(config_path="config.json"):
     """
     설정 파일(config.json)에 정의된 모든 지수, 매크로, 빅테크 종목 데이터 일괄 수집
@@ -523,6 +623,9 @@ def collect_all_market_data(config_path="config.json"):
     logger.info("장 마감 후 시간외 거래(After-market ±5% 기준) 및 당일 분기실적 팩트체크 중...")
     after_market = fetch_after_market_news()
 
+    logger.info("당일 미국 시총 상위 빅테크·반도체 어닝콜 및 분기 실적(YoY·QoQ) 발표 감지 중...")
+    earnings_calls_raw = fetch_us_earnings_calls()
+
     return {
         "date_str": date_str,
         "indices": indices_data,
@@ -531,6 +634,7 @@ def collect_all_market_data(config_path="config.json"):
         "focus_stocks": focus_data,
         "m7": m7_data,
         "after_market": after_market,
+        "earnings_calls_raw": earnings_calls_raw,
         "verified_earnings": verified_earnings,
         "news": news,
         "config": config
