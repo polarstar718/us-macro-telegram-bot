@@ -249,6 +249,79 @@ def fetch_kr_market_news():
     return news_list
 
 
+def fetch_kr_earnings_calls():
+    """당일 실적 발표(IR/어닝콜)가 있는 시총 상위 대표주를 감지하고 분기 재무제표(YoY·QoQ·컨센서스) 및 어닝콜 속보를 수집"""
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    candidates = [
+        ("005930", "삼성전자"),
+        ("000660", "SK하이닉스"),
+    ] + [(code, name) for code, name, _ in TOP_KR_STOCKS]
+
+    earnings_list = []
+    for code, name in candidates:
+        try:
+            r_int = requests.get(f"https://m.stock.naver.com/api/stock/{code}/integration", headers=HEADERS, timeout=8)
+            if r_int.status_code != 200:
+                continue
+            int_data = r_int.json()
+            ir_info = int_data.get("irScheduleInfo") or {}
+            ir_date = ir_info.get("irScheduleDate", "")
+            ir_dday = ir_info.get("irScheduleDday")
+            ir_title = ir_info.get("title", "경영실적 발표")
+
+            # 당일(D-Day == 0 또는 irScheduleDate == today_str) 실적 발표 기업만 감지
+            if ir_date != today_str and ir_dday != 0:
+                continue
+
+            # 분기 재무 데이터(매출액, 영업이익, 당기순이익, 영업이익률) 수집 (YoY/QoQ/컨센서스 비교용)
+            fin_summary = {}
+            r_fin = requests.get(f"https://m.stock.naver.com/api/stock/{code}/finance/quarter", headers=HEADERS, timeout=8)
+            if r_fin.status_code == 200:
+                finfo = (r_fin.json() or {}).get("financeInfo") or {}
+                titles = finfo.get("trTitleList") or []
+                rows = finfo.get("rowList") or []
+                for row in rows:
+                    r_title = row.get("title", "")
+                    if r_title in ("매출액", "영업이익", "당기순이익", "영업이익률"):
+                        cols = row.get("columns") or {}
+                        fin_summary[r_title] = {
+                            f"{t.get('title', t.get('key', ''))}_{'컨센서스(시장예상치)' if t.get('isConsensus') == 'Y' else '과거확정치'}": (cols.get(t.get("key", "")) or {}).get("value", "-")
+                            for t in titles
+                        }
+
+            # 당일 실적 발표 수치(YoY, QoQ) 및 컨퍼런스콜(어닝콜) 속보 뉴스 수집
+            call_news = []
+            seen_titles = set()
+            for q in [f"{name} 실적 매출 영업이익 전년", f"{name} 컨퍼런스콜", f"{name} 어닝콜 HBM 가이던스"]:
+                try:
+                    enc = urllib.parse.quote(q)
+                    url = f"https://news.google.com/rss/search?q={enc}&hl=ko&gl=KR&ceid=KR:ko"
+                    req = urllib.request.Request(url, headers=HEADERS)
+                    with urllib.request.urlopen(req, timeout=8) as resp:
+                        root = ET.fromstring(resp.read())
+                    for item in root.findall(".//item")[:5]:
+                        t_text = (item.findtext("title") or "").strip()
+                        if t_text and t_text not in seen_titles:
+                            seen_titles.add(t_text)
+                            call_news.append(t_text)
+                except Exception as ne:
+                    logger.debug(f"어닝콜 뉴스 수집 예외 ({name}): {ne}")
+
+            earnings_list.append({
+                "code": code,
+                "name": name,
+                "ir_title": ir_title,
+                "ir_date": ir_date,
+                "quarterly_table_억_기준": fin_summary,
+                "earnings_call_news": call_news[:10]
+            })
+            logger.info(f"🎙️ 당일 어닝콜/실적발표 감지: {name}({code}) - {ir_title}")
+        except Exception as e:
+            logger.warning(f"어닝콜 일정 확인 실패 ({code} {name}): {e}")
+
+    return earnings_list
+
+
 def collect_kr_market_data():
     """한국 증시 마감 브리핑용 전체 데이터 일괄 수집"""
     now = datetime.datetime.now()
@@ -276,6 +349,9 @@ def collect_kr_market_data():
     logger.info("국내 증권가 시황 및 반도체 뉴스 헤드라인 수집 중...")
     news = fetch_kr_market_news()
 
+    logger.info("당일 시총 상위 대표주 어닝콜 및 분기 실적(YoY·QoQ) 발표 여부 확인 중...")
+    earnings_calls_raw = fetch_kr_earnings_calls()
+
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
 
@@ -289,6 +365,7 @@ def collect_kr_market_data():
         "hynix": hynix,
         "top_stocks": top_stocks,
         "news": news,
+        "earnings_calls_raw": earnings_calls_raw,
         "branding": config.get("branding", {"name": "최광민", "title": "AI Market Analyst"})
     }
 
@@ -329,10 +406,11 @@ def generate_kr_ai_analysis(kr_data):
     hynix = kr_data["hynix"]
     top_stocks = kr_data["top_stocks"]
     news_lines = [f"[{n['source']}] {n['title']}" for n in kr_data.get("news", [])]
+    earnings_raw = kr_data.get("earnings_calls_raw", [])
 
     prompt = f"""
 당신은 한국 증시(코스피·코스닥)와 반도체 섹터(삼성전자·SK하이닉스), 그리고 미국 증시(엔비디아·AMD·필라델피아 반도체)의 연결고리를 가장 정확하고 알기 쉽게 해설하는 수석 애널리스트입니다.
-아래 [실측 시장 데이터]와 [국내 증권가·언론 시황 헤드라인]을 바탕으로 한국 증시 마감 브리핑 JSON을 작성해 주세요.
+아래 [실측 시장 데이터], [당일 어닝콜 & 분기 실적 발표 데이터], [국내 증권가·언론 시황 헤드라인]을 바탕으로 한국 증시 마감 브리핑 JSON을 작성해 주세요.
 
 [실측 한국 증시 데이터 (절대 팩트)]
 - 일시: {kr_data['date_str']}
@@ -343,16 +421,22 @@ def generate_kr_ai_analysis(kr_data):
 - SK하이닉스(000660): {hynix['price']} ({hynix['symbol']} {hynix['pct_str']}) | {hynix['flow_str']}
 - 시총 상위 대표주: {json.dumps([{s['name']: f"{s['price']} ({s['pct_str']})"} for s in top_stocks], ensure_ascii=False)}
 - 오늘 국내 증권가·언론 실시간 헤드라인: {json.dumps(news_lines, ensure_ascii=False)}
+- [당일 어닝콜 & 분기 실적(YoY·QoQ) 원본 데이터]: {json.dumps(earnings_raw, ensure_ascii=False)}
 
 [작성 및 팩트체크 지침]
 1. **수치 및 수급 100% 일치**: 위 데이터의 지수, 삼성전자·SK하이닉스 주가와 등락률, 외국인·기관 순매수 금액을 단 1의 오차도 없이 정확히 반영할 것.
 2. **삼성전자 & SK하이닉스 투톱 집중 분석 (`focus_analysis`)**:
    - 간밤 미국 반도체(엔비디아·AMD·필라델피아 반도체 지수) 훈풍/영향, HBM 및 범용 메모리 업황, 외국인·기관 수급, 증권사 리포트 코멘트를 종합하여 각 종목의 오늘 움직임 배경과 핵심 체크포인트를 친절하게 설명할 것.
-3. **주요 시황 코멘트 & 전문가 의견 (`reasons` 2개)**:
+3. **당일 어닝콜 & 분기 실적(YoY·QoQ) 집중 요약 (`earnings_calls`)**:
+   - `[당일 어닝콜 & 분기 실적 원본 데이터]`가 비어있지 않은 경우, 반드시 `earnings_call_news`(당일 실적 발표 속보 헤드라인)에 보도된 **실제 발표 확정치(매출액, 영업이익, 영업이익률, YoY, QoQ)**를 최우선으로 사용할 것!
+   - 주의: `quarterly_table_억_기준`에서 `_컨센서스(시장예상치)`로 끝나는 열(예: `2026.09(E)_컨센서스(시장예상치)`)은 발표 전 시장 예상치(Consensus)이므로 확정 실적과 혼동하지 말고, 실제 발표된 확정치가 컨센서스를 얼마나 상회/하회했는지 비교하는 용도로만 사용할 것.
+   - 컨센서스 상회 여부(`badge`: `"어닝 서프라이즈 🔥"`, `"컨센서스 부합"`, `"컨센서스 하회"` 등)와 **컨퍼런스콜(어닝콜) 경영진 핵심 가이던스·Q&A 발언 2가지(`highlights`)**를 정확히 요약할 것.
+   - 만약 `[당일 어닝콜 & 분기 실적 원본 데이터]`가 빈 배열(`[]`)이면 `earnings_calls`도 반드시 빈 배열(`[]`)로 반환할 것.
+4. **주요 시황 코멘트 & 전문가 의견 (`reasons` 2개)**:
    - 오늘 한국 증시를 움직인 가장 중요한 원인 2가지를 국내 증권가·외신 분석을 바탕으로 명확하게 정리할 것.
-4. **오늘 밤 미국 증시 연동 관전 포인트 (`us_bridge`)**:
+5. **오늘 밤 미국 증시 연동 관전 포인트 (`us_bridge`)**:
    - 오늘 한국 반도체·대형주 흐름을 바탕으로, 오늘 밤 열리는 미국 증시(엔비디아, AMD, 빅테크 실적 발표 및 매크로 지표)에서 투자자가 무엇을 주목해야 할지 2줄로 연결해 줄 것.
-5. 마크다운 백틱 없이 순수 JSON만 반환할 것.
+6. 마크다운 백틱 없이 순수 JSON만 반환할 것.
 
 [JSON 응답 형식]
 {{
@@ -370,6 +454,18 @@ def generate_kr_ai_analysis(kr_data):
     }}
   }},
   "stocks_note": "시총 상위 대표주(2차전지·바이오·자동차·금융·한미반도체) 흐름 한 줄 요약",
+  "earnings_calls": [
+    {{
+      "name": "기업명 (종목코드)",
+      "quarter": "2026년 3분기 확정실적 & 컨퍼런스콜",
+      "badge": "어닝 서프라이즈 🔥",
+      "metrics": "매출액 OO조원 (YoY +OO%, QoQ +OO%) · 영업이익 OO조원 (YoY +OO%, QoQ +OO%, 영업이익률 OO%)",
+      "highlights": [
+        "어닝콜 경영진 핵심 가이던스·수주/출하 계획·수요 전망 요약 1줄",
+        "어닝콜 설비투자(CapEx)·주주환원·차세대 제품(HBM4 등) Q&A 핵심 발언 요약 1줄"
+      ]
+    }}
+  ],
   "reasons": [
     {{
       "title": "첫 번째 핵심 시황 배경 및 증권가 코멘트 제목",
@@ -392,7 +488,9 @@ def generate_kr_ai_analysis(kr_data):
     # 2차 팩트체크 감사(Auditor) 패스
     audit_prompt = f"""
 당신은 한국 증시 리포트 팩트체크 감사관입니다.
-아래 [1차 초안 JSON]이 [실측 원본 데이터]의 수치 및 등락 부호와 100% 일치하는지 검증하고, 틀린 수치나 과장된 표현이 있다면 즉시 수정한 순수 JSON을 반환해 주세요.
+아래 [1차 초안 JSON]이 [실측 원본 데이터] 및 [어닝콜 & 분기 실적 원본 데이터]의 수치(주가, 등락률, 매출, 영업이익, YoY, QoQ 등)와 100% 일치하는지 검증하고, 틀린 수치나 과장된 표현이 있다면 즉시 수정한 순수 JSON을 반환해 주세요.
+- 주의 1: `quarterly_table_억_기준`의 `_컨센서스(시장예상치)` 수치를 실제 확정 실적으로 오기재하지 않았는지 점검하고, 반드시 `earnings_call_news`에 보도된 당일 실제 확정 매출·영업이익 수치와 함께 **YoY(%) 및 QoQ(%) 증감률**을 `metrics`에 빠짐없이 명시할 것! (과거 확정치 대비 계산 가능)
+- 주의 2: `reasons` 배열 내 각 항목의 `title`과 `content`(2줄 상세 설명) 필드를 절대 생략하지 말고 모두 유지할 것!
 
 [실측 원본 데이터]
 - 코스피: {kospi['price']} ({kospi['pct_str']}, {kospi['sub_value']})
@@ -401,23 +499,46 @@ def generate_kr_ai_analysis(kr_data):
 - 삼성전자: {sec['price']} ({sec['pct_str']}, {sec['flow_str']})
 - SK하이닉스: {hynix['price']} ({hynix['pct_str']}, {hynix['flow_str']})
 - 시총 상위주: {json.dumps([{s['name']: f"{s['price']} ({s['pct_str']})"} for s in top_stocks], ensure_ascii=False)}
+- 당일 어닝콜 & 분기 실적 원본 데이터: {json.dumps(earnings_raw, ensure_ascii=False)}
 
 [1차 초안 JSON]
 {json.dumps(draft, ensure_ascii=False)}
 """
     logger.info("Gemini 2차 한국 증시 브리핑 팩트체크 감사(Auditor) 실행 중...")
     audited = _call_gemini_json(audit_prompt, api_key, temperature=0.1)
-    if audited and "headline" in audited and "focus_analysis" in audited:
-        logger.info("✅ 한국 증시 마감 브리핑 2차 팩트체크 감사 완료!")
-        return audited
+    result = audited if (audited and "headline" in audited and "focus_analysis" in audited) else draft
 
-    return draft
+    # reasons 내 content 누락 방지 가드레일
+    draft_reasons = draft.get("reasons") or fallback.get("reasons", [])
+    res_reasons = result.get("reasons") or []
+    for idx, r in enumerate(res_reasons):
+        if isinstance(r, dict) and not (r.get("content") or r.get("desc")):
+            if idx < len(draft_reasons) and isinstance(draft_reasons[idx], dict):
+                r["content"] = draft_reasons[idx].get("content", "")
+
+    if not earnings_raw:
+        result["earnings_calls"] = []
+    elif not result.get("earnings_calls"):
+        result["earnings_calls"] = draft.get("earnings_calls") or fallback.get("earnings_calls", [])
+    logger.info("✅ 한국 증시 마감 브리핑 2차 팩트체크 감사 완료!")
+    return result
 
 
 def get_fallback_kr_analysis(kr_data):
     kospi = kr_data["kospi"]
     sec = kr_data["sec"]
     hynix = kr_data["hynix"]
+    earnings_raw = kr_data.get("earnings_calls_raw", [])
+    fallback_calls = []
+    for ec in earnings_raw:
+        news_top = ec.get("earnings_call_news", [])
+        fallback_calls.append({
+            "name": f"{ec['name']} ({ec['code']})",
+            "quarter": ec.get("ir_title", "분기 경영실적 & 어닝콜"),
+            "badge": "실적 · 어닝콜 발표",
+            "metrics": news_top[0] if news_top else f"{ec['name']} 분기 확정 실적 발표",
+            "highlights": news_top[1:3] if len(news_top) >= 3 else ["당일 실적 발표 및 컨퍼런스콜 주요 가이던스 확인"]
+        })
     return {
         "headline": f"코스피 {kospi['price']} ({kospi['pct_str']}) · 삼성전자({sec['pct_str']}) 및 SK하이닉스({hynix['pct_str']}) 중심 반도체 수급 집중",
         "focus_analysis": {
@@ -433,6 +554,7 @@ def get_fallback_kr_analysis(kr_data):
             }
         },
         "stocks_note": "반도체·금융·자동차 등 실적 및 밸류업 모멘텀 보유 대형주 중심의 선별적 강세가 나타났습니다.",
+        "earnings_calls": fallback_calls,
         "reasons": [
             {
                 "title": f"코스피 {kospi['sub_value']} 수급 유입 및 미 반도체 훈풍 반영",
@@ -527,6 +649,16 @@ def send_kr_briefing_to_telegram(image_path, kr_data, ai_data):
     sec = kr_data["sec"]
     hynix = kr_data["hynix"]
 
+    ec_block = ""
+    earnings_calls = ai_data.get("earnings_calls") or []
+    if earnings_calls:
+        ec_lines = []
+        for ec in earnings_calls[:2]:
+            ec_lines.append(f"• *{ec.get('name', '')}*: {ec.get('metrics', '')}")
+            for hl in (ec.get("highlights") or [])[:1]:
+                ec_lines.append(f"  └ 🗣 {hl}")
+        ec_block = "\n🎙 *당일 어닝콜 & 실적(YoY·QoQ)*\n" + "\n".join(ec_lines) + "\n"
+
     caption = f"""🇰🇷 *한국 증시 마감 브리핑 (K-Market Brief)*
 🗓 *기준*: {kr_data['date_str']}
 
@@ -541,8 +673,8 @@ def send_kr_briefing_to_telegram(image_path, kr_data, ai_data):
 🎯 *반도체 투톱 집중 점검*
 • 🔵 *삼성전자*: {sec['price']} ({sec['symbol']}{sec['pct_str']})
 • 🟠 *SK하이닉스*: {hynix['price']} ({hynix['symbol']}{hynix['pct_str']})
-
-#한국증시 #코스피 #코스닥 #삼성전자 #SK하이닉스 #HBM #외국인수급 #환율"""
+{ec_block}
+#한국증시 #코스피 #코스닥 #삼성전자 #SK하이닉스 #어닝콜 #외국인수급 #환율"""
 
     if len(caption) > 1020:
         caption = caption[:1015] + "..."
