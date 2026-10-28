@@ -221,6 +221,7 @@
       font-weight: 800;
       color: #0F172A;
       margin-left: 5px;
+      white-space: nowrap;
     }
     .focus-stock-tag {
       display: block;
@@ -228,16 +229,19 @@
       color: #64748B;
       margin-top: 3px;
       font-weight: 600;
+      white-space: nowrap;
     }
     .focus-price {
-      font-size: 19.5px;
+      font-size: 18px;
       font-weight: 800;
       color: #0F172A;
+      white-space: nowrap;
     }
     .focus-pct {
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 700;
       margin-left: 4px;
+      white-space: nowrap;
     }
     .focus-flow {
       display: block;
@@ -432,6 +436,118 @@
       font-weight: 500;
     }
 
+    /* 어닝콜 & 분기 실적(YoY/QoQ) 동적 하이라이트 섹션 */
+    .earnings-call-section {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 18px 22px;
+      border: 1.5px solid #F59E0B;
+      box-shadow: 0 3px 10px rgba(245, 158, 11, 0.08);
+    }
+    .ec-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #FEF3C7;
+    }
+    .ec-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ec-badge-main {
+      background: #D97706;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.4px;
+    }
+    .ec-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .ec-sub {
+      font-size: 11px;
+      font-weight: 700;
+      color: #B45309;
+    }
+    .ec-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ec-card {
+      background: #FFFBEB;
+      border: 1px solid #FDE68A;
+      border-left: 4px solid #D97706;
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .ec-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .ec-company {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #0F172A;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ec-quarter {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #64748B;
+    }
+    .ec-status-pill {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #FEE2E2;
+      color: #DC2626;
+      border: 1px solid #FECACA;
+    }
+    .ec-metrics-box {
+      background: #FFFFFF;
+      border: 1px solid #FDE68A;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #1E293B;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ec-metrics-tag {
+      background: #0F172A;
+      color: #E2B755;
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .ec-call-points {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #334155;
+      line-height: 1.48;
+      font-weight: 600;
+    }
+
     /* 한국 증시 색상 규격 (상승 빨강, 하락 파랑) */
     .up {
       color: #DC2626 !important;
@@ -584,6 +700,41 @@
       </div>
     </div>
 
+    <!-- 2.5 시총 상위 대표주 어닝콜 & 분기 실적(YoY·QoQ) 속보 (당일 발표 기업이 있을 때만 동적 표시) -->
+    {% if ai.earnings_calls %}
+    <div class="earnings-call-section">
+      <div class="ec-header">
+        <div class="ec-title-wrap">
+          <span class="ec-badge-main">🎙️ EARNINGS CALL</span>
+          <span class="ec-title">오늘의 시총 상위 대표주 어닝콜 & 확정 실적 (YoY·QoQ)</span>
+        </div>
+        <span class="ec-sub">당일 실적 발표 · 컨퍼런스콜 핵심 요약</span>
+      </div>
+      <div class="ec-list">
+        {% for ec in ai.earnings_calls %}
+        <div class="ec-card">
+          <div class="ec-top">
+            <div class="ec-company">
+              <span>{{ ec.name }}</span>
+              <span class="ec-quarter">· {{ ec.quarter }}</span>
+            </div>
+            <span class="ec-status-pill">{{ ec.badge }}</span>
+          </div>
+          <div class="ec-metrics-box">
+            <span class="ec-metrics-tag">실적·증감률</span>
+            <span>{{ ec.metrics }}</span>
+          </div>
+          <div class="ec-call-points">
+            {% for pt in ec.highlights %}
+            <div>• {{ pt }}</div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- 3. 하단 2단: 시총 상위 대표주 / 증권가 코멘트 & 미 증시 연동 -->
     <div class="two-column-grid">
 
@@ -619,7 +770,7 @@
               <div class="reason-num">{{ loop.index }}</div>
               <div>
                 <div class="reason-heading">{{ r.title }}</div>
-                <div class="reason-body">{{ r.content }}</div>
+                <div class="reason-body">{{ r.content or r.desc or r.description or r.analysis }}</div>
               </div>
             </div>
             {% endfor %}
