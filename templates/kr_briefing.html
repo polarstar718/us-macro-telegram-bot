@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>한국 증시 마감 브리핑</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background-color: #EDF2F7;
+      color: #1E293B;
+      width: 860px;
+      margin: 0 auto;
+      padding-bottom: 22px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 (딥 네이비) */
+    .header-banner {
+      background: #0B1528;
+      color: #FFFFFF;
+      padding: 32px 36px 26px 36px;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .header-subtitle {
+      font-size: 13px;
+      font-weight: 700;
+      color: #E2B755;
+      letter-spacing: 1.2px;
+    }
+    .header-date {
+      font-size: 13px;
+      color: #94A3B8;
+      font-weight: 500;
+    }
+    .header-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 18px;
+    }
+    .judgment-box {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .judgment-badge {
+      background: #E5A93B;
+      color: #0F172A;
+      font-size: 12.5px;
+      font-weight: 800;
+      padding: 4px 9px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .judgment-text {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: #F8FAFC;
+    }
+
+    /* 본문 컨테이너 */
+    .content-container {
+      padding: 22px 32px 10px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 3대 핵심 지표 카드 (코스피 / 코스닥 / 원달러 환율) */
+    .indices-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .index-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .index-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #64748B;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .index-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      background: #F1F5F9;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .index-price {
+      font-size: 27px;
+      font-weight: 800;
+      color: #0F172A;
+      letter-spacing: -0.5px;
+      margin-bottom: 5px;
+    }
+    .index-change {
+      font-size: 14.5px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .investor-strip {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* 핵심 반도체 투톱 포커스 (삼성전자 & SK하이닉스) */
+    .focus-section {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .focus-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .focus-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .focus-badge {
+      background: #0B1528;
+      color: #E2B755;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+    .focus-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .focus-sub {
+      font-size: 11.5px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .focus-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .focus-card {
+      background: #F8FAFC;
+      border-radius: 12px;
+      padding: 16px 18px;
+      border: 1px solid #E2E8F0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .focus-card-sec {
+      border-top: 3.5px solid #0284C7;
+    }
+    .focus-card-hynix {
+      border-top: 3.5px solid #EA580C;
+    }
+    .focus-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .focus-pill {
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .focus-stock-name {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-left: 5px;
+    }
+    .focus-stock-tag {
+      display: block;
+      font-size: 11px;
+      color: #64748B;
+      margin-top: 3px;
+      font-weight: 600;
+    }
+    .focus-price {
+      font-size: 19.5px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .focus-pct {
+      font-size: 13.5px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    .focus-flow {
+      display: block;
+      font-size: 11px;
+      color: #64748B;
+      text-align: right;
+      margin-top: 3px;
+      font-weight: 600;
+    }
+    .focus-headline {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #1E293B;
+      margin-bottom: 6px;
+      line-height: 1.35;
+    }
+    .focus-desc {
+      font-size: 12.5px;
+      color: #475569;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .focus-check {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 11.5px;
+      line-height: 1.45;
+    }
+    .focus-check-label {
+      color: #0F172A;
+      font-weight: 800;
+      margin-right: 5px;
+    }
+    .focus-check-text {
+      color: #334155;
+    }
+
+    /* 하단 2단 레이아웃: 시총 상위주 / 증권가 코멘트 & 미 증시 연동 */
+    .two-column-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 16px;
+    }
+    .section-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 20px 22px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .section-title {
+      font-size: 16.5px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 14px;
+    }
+    .table-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .table-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13.5px;
+      padding-bottom: 7px;
+      border-bottom: 1px dashed #F1F5F9;
+    }
+    .table-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .item-label {
+      font-weight: 700;
+      color: #1E293B;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .item-sector {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #94A3B8;
+    }
+    .item-values {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .item-price {
+      font-weight: 700;
+      color: #0F172A;
+      text-align: right;
+    }
+    .item-change {
+      font-weight: 800;
+      min-width: 58px;
+      text-align: right;
+    }
+    .section-note {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #F1F5F9;
+      font-size: 11.5px;
+      color: #64748B;
+      line-height: 1.45;
+      font-weight: 500;
+    }
+
+    /* 우측: 증권가 코멘트 & 오늘 밤 미 증시 연동 */
+    .right-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .reason-card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 18px 22px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      flex: 1;
+    }
+    .reason-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .reason-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .reason-num {
+      background: #0F172A;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 800;
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .reason-heading {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 3px;
+    }
+    .reason-body {
+      font-size: 12px;
+      color: #475569;
+      line-height: 1.48;
+    }
+
+    /* 오늘 밤 미국장 연동 체크포인트 박스 */
+    .us-bridge-card {
+      background: #0B1528;
+      color: #FFFFFF;
+      border-radius: 14px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+    .us-bridge-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .us-bridge-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #E2B755;
+    }
+    .us-bridge-sub {
+      font-size: 10.5px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .us-bridge-text {
+      font-size: 12.5px;
+      color: #F8FAFC;
+      line-height: 1.5;
+      font-weight: 500;
+    }
+
+    /* 한국 증시 색상 규격 (상승 빨강, 하락 파랑) */
+    .up {
+      color: #DC2626 !important;
+    }
+    .down {
+      color: #2563EB !important;
+    }
+    .neutral {
+      color: #64748B !important;
+    }
+
+    /* 푸터 */
+    .footer-section {
+      margin: 16px 32px 0 32px;
+      padding-top: 14px;
+      border-top: 1px solid #CBD5E1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand-name {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .branding-right {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 17.5px;
+      font-weight: 600;
+      font-style: italic;
+      color: #0B1528;
+    }
+    .branding-right span {
+      color: #D4A044;
+    }
+    .sources-line {
+      margin: 8px 32px 0 32px;
+      font-size: 10.5px;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 헤더 -->
+  <div class="header-banner">
+    <div class="header-top">
+      <div class="header-subtitle">미국주식공부방 · K-MARKET CLOSING BRIEF</div>
+      <div class="header-date">{{ date_str }}</div>
+    </div>
+    <h1 class="header-title">한국 증시 마감 브리핑</h1>
+    <div class="judgment-box">
+      <div class="judgment-badge">오늘의 판단</div>
+      <div class="judgment-text">{{ ai.headline }}</div>
+    </div>
+  </div>
+
+  <div class="content-container">
+
+    <!-- 1. 코스피 / 코스닥 / 원·달러 환율 및 투자자 수급 -->
+    <div class="indices-grid">
+      {% for idx in indices %}
+      <div class="index-card">
+        <div>
+          <div class="index-name">
+            <span>{{ idx.name }}</span>
+            <span class="index-tag">{{ idx.tag }}</span>
+          </div>
+          <div class="index-price">{{ idx.price }}</div>
+        </div>
+        <div>
+          <div class="index-change {{ idx.cls }}">
+            <span>{{ idx.symbol }}</span>
+            <span>{{ idx.diff_str }} ({{ idx.pct_str }})</span>
+          </div>
+          <div class="investor-strip">
+            <span>{{ idx.sub_label }}</span>
+            <span>{{ idx.sub_value }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- 2. 대한민국 반도체 투톱 집중 점검: 삼성전자 & SK하이닉스 -->
+    <div class="focus-section">
+      <div class="focus-header">
+        <div class="focus-title-wrap">
+          <span class="focus-badge">K-SEMICON DUO</span>
+          <span class="focus-title">핵심 종목 집중 점검 · 삼성전자 & SK하이닉스</span>
+        </div>
+        <span class="focus-sub">반도체 투톱 수급 및 증권가 뷰</span>
+      </div>
+      <div class="focus-grid">
+        <!-- 삼성전자 -->
+        <div class="focus-card focus-card-sec">
+          <div class="focus-card-top">
+            <div>
+              <div style="display: flex; align-items: center;">
+                <span class="focus-pill" style="background-color: #0284C7;">005930</span>
+                <span class="focus-stock-name">{{ sec.name }}</span>
+              </div>
+              <span class="focus-stock-tag">글로벌 메모리 · 파운드리 대장주</span>
+            </div>
+            <div style="text-align: right;">
+              <div>
+                <span class="focus-price">{{ sec.price }}</span>
+                <span class="focus-pct {{ sec.cls }}">{{ sec.symbol }} {{ sec.pct_str }}</span>
+              </div>
+              <span class="focus-flow">{{ sec.flow_str }}</span>
+            </div>
+          </div>
+          <div>
+            <div class="focus-headline">{{ ai.focus_analysis.sec.title }}</div>
+            <div class="focus-desc">{{ ai.focus_analysis.sec.analysis }}</div>
+            <div class="focus-check">
+              <span class="focus-check-label">💡 핵심 포인트</span>
+              <span class="focus-check-text">{{ ai.focus_analysis.sec.key_point }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SK하이닉스 -->
+        <div class="focus-card focus-card-hynix">
+          <div class="focus-card-top">
+            <div>
+              <div style="display: flex; align-items: center;">
+                <span class="focus-pill" style="background-color: #EA580C;">000660</span>
+                <span class="focus-stock-name">{{ hynix.name }}</span>
+              </div>
+              <span class="focus-stock-tag">AI HBM 글로벌 독점적 선두주</span>
+            </div>
+            <div style="text-align: right;">
+              <div>
+                <span class="focus-price">{{ hynix.price }}</span>
+                <span class="focus-pct {{ hynix.cls }}">{{ hynix.symbol }} {{ hynix.pct_str }}</span>
+              </div>
+              <span class="focus-flow">{{ hynix.flow_str }}</span>
+            </div>
+          </div>
+          <div>
+            <div class="focus-headline">{{ ai.focus_analysis.hynix.title }}</div>
+            <div class="focus-desc">{{ ai.focus_analysis.hynix.analysis }}</div>
+            <div class="focus-check">
+              <span class="focus-check-label">💡 핵심 포인트</span>
+              <span class="focus-check-text">{{ ai.focus_analysis.hynix.key_point }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 하단 2단: 시총 상위 대표주 / 증권가 코멘트 & 미 증시 연동 -->
+    <div class="two-column-grid">
+
+      <!-- 좌측: 시총 상위 및 주도주 동향 -->
+      <div class="section-card">
+        <div>
+          <div class="section-title">시총 상위 · 주도주 마감 동향</div>
+          <div class="table-list">
+            {% for st in top_stocks %}
+            <div class="table-row">
+              <div class="item-label">
+                <span>{{ st.name }}</span>
+                <span class="item-sector">{{ st.sector }}</span>
+              </div>
+              <div class="item-values">
+                <span class="item-price">{{ st.price }}</span>
+                <span class="item-change {{ st.cls }}">{{ st.pct_str }}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="section-note">{{ ai.stocks_note }}</div>
+      </div>
+
+      <!-- 우측: 증권가 핵심 코멘트 & 오늘 밤 미 증시 연동 -->
+      <div class="right-stack">
+        <div class="reason-card">
+          <div class="section-title">주요 시황 코멘트 & 전문가 의견</div>
+          <div class="reason-list">
+            {% for r in ai.reasons %}
+            <div class="reason-item">
+              <div class="reason-num">{{ loop.index }}</div>
+              <div>
+                <div class="reason-heading">{{ r.title }}</div>
+                <div class="reason-body">{{ r.content }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="us-bridge-card">
+          <div class="us-bridge-head">
+            <span class="us-bridge-title">🇺🇸 오늘 밤 미국 증시 연동 관전 포인트</span>
+            <span class="us-bridge-sub">NVDA · AMD · 빅테크 연계</span>
+          </div>
+          <div class="us-bridge-text">{{ ai.us_bridge }}</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- 푸터 -->
+  <div class="footer-section">
+    <div>
+      <div class="brand-name">{{ branding.name }} {{ branding.title }}</div>
+    </div>
+    <div class="branding-right">
+      Dream infinite, <span>Act right</span>
+    </div>
+  </div>
+  <div class="sources-line">
+    출처: 네이버 금융, 한국거래소(KRX), 연합인포맥스, 국내외 주요 증권사 리서치 종합
+  </div>
+
+</body>
+</html>
