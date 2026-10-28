@@ -60,8 +60,15 @@ def build_telegram_caption(market_data, ai_data, has_heatmap=True):
         focus_parts.append(f"{icon} *{ticker}* {price} ({symbol}{pct})")
     focus_line = "   ".join(focus_parts)
 
-    # 4. 해시태그 목록
-    hashtags = "#미국증시 #NVDA #AMD #나스닥 #환율 #국내장영향 #SOX #공포탐욕지수"
+    # 4. 당일 어닝콜 & 분기 실적(YoY·QoQ) 요약 (존재할 경우에만 동적 표시)
+    ec_lines = []
+    for ec in (ai_data.get("earnings_calls") or [])[:2]:
+        ec_lines.append(f"• *{ec.get('name', '')}*: {ec.get('metrics', '')}")
+        for hl in (ec.get("highlights") or [])[:1]:
+            ec_lines.append(f"  └ 🗣 {hl}")
+
+    # 5. 해시태그 목록
+    hashtags = "#미국증시 #NVDA #AMD #나스닥 #환율 #국내장영향 #SOX #어닝콜"
 
     # 캡션 조합
     caption_parts = [
@@ -74,9 +81,12 @@ def build_telegram_caption(market_data, ai_data, has_heatmap=True):
         f"2️⃣ *매크로/환율*: {macro_line}",
         f"3️⃣ *국내 증시 영향*: {k_impact}\n",
         "🎯 *핵심 보유주 집중 점검 (AI 반도체)*",
-        f"{focus_line}\n",
-        hashtags
+        f"{focus_line}\n"
     ]
+    if ec_lines:
+        caption_parts.append("🎙 *당일 어닝콜 & 실적(YoY·QoQ)*")
+        caption_parts.append("\n".join(ec_lines) + "\n")
+    caption_parts.append(hashtags)
 
     if has_heatmap:
         caption_parts.append("\n_※ 사진 1: 인포그래픽 카드 | 사진 2: S&P 500 일간 히트맵_")
