@@ -559,6 +559,124 @@
       font-weight: 600;
     }
 
+    /* 어닝콜 & 분기 실적(YoY·QoQ) 집중 브리핑 섹션 (동적 노출) */
+    .earnings-call-section {
+      background: linear-gradient(135deg, #FFFBEB 0%, #FFFFFF 45%, #FEF3C7 100%);
+      border: 1.5px solid #F59E0B;
+      border-radius: 10px;
+      padding: 15px 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 3px 12px rgba(245, 158, 11, 0.12);
+    }
+    .ec-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #FCD34D;
+    }
+    .ec-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ec-badge {
+      background: #B45309;
+      color: #FFFFFF;
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.4px;
+    }
+    .ec-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #78350F;
+    }
+    .ec-sub {
+      font-size: 11px;
+      font-weight: 700;
+      color: #B45309;
+    }
+    .ec-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ec-card {
+      background: #FFFFFF;
+      border: 1px solid #FDE68A;
+      border-left: 4px solid #D97706;
+      border-radius: 8px;
+      padding: 11px 14px;
+    }
+    .ec-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .ec-company-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ec-company {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .ec-quarter {
+      font-size: 11px;
+      font-weight: 700;
+      color: #92400E;
+      background: #FEF3C7;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .ec-beat-badge {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #DC2626;
+      color: #FFFFFF;
+    }
+    .ec-metrics-box {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 7px 10px;
+      margin-bottom: 8px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #1E293B;
+      line-height: 1.4;
+    }
+    .ec-highlights {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ec-bullet {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 12px;
+      color: #334155;
+      line-height: 1.45;
+      font-weight: 600;
+    }
+    .ec-bullet-icon {
+      color: #D97706;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+
     /* 색상 규격 (한국 증시: 빨간색 상승, 파란색 하락) */
     .up {
       color: #DC2626 !important; /* Red */
@@ -783,6 +901,49 @@
       </div>
 
     </div>
+
+    <!-- 당일 어닝콜 & 분기 실적(YoY·QoQ) 집중 브리핑 (실적/어닝콜 발표일에만 동적 표시) -->
+    {% if ai.earnings_calls %}
+    <div class="earnings-call-section">
+      <div class="ec-header">
+        <div class="ec-title-wrap">
+          <span class="ec-badge">🎙️ EARNINGS CALL</span>
+          <span class="ec-title">어닝콜 & 분기 실적(YoY · QoQ) 집중 브리핑</span>
+        </div>
+        <span class="ec-sub">당일 실적 발표 · 컨퍼런스콜 핵심 가이던스</span>
+      </div>
+      <div class="ec-list">
+        {% for ec in ai.earnings_calls %}
+        <div class="ec-card">
+          <div class="ec-card-top">
+            <div class="ec-company-wrap">
+              <span class="ec-company">{{ ec.name }}</span>
+              {% if ec.quarter %}
+              <span class="ec-quarter">{{ ec.quarter }}</span>
+              {% endif %}
+            </div>
+            {% if ec.badge %}
+            <span class="ec-beat-badge">{{ ec.badge }}</span>
+            {% endif %}
+          </div>
+          {% if ec.metrics %}
+          <div class="ec-metrics-box">{{ ec.metrics }}</div>
+          {% endif %}
+          {% if ec.highlights %}
+          <div class="ec-highlights">
+            {% for hl in ec.highlights %}
+            <div class="ec-bullet">
+              <span class="ec-bullet-icon">🗣</span>
+              <span>{{ hl }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <!-- 하단 2단 그리드: 왜 이렇게 판단했나 / 체크포인트 -->
     <div class="two-column-grid">
