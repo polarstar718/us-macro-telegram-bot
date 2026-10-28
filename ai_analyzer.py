@@ -80,6 +80,12 @@ def _enforce_hard_facts_on_analysis(data, market_data):
                 logger.warning(f"[팩트체크 가드레일] {field} 내 미검증 시간외 등락률 문구 감지 및 교정")
                 data[field] = hallucination_pattern.sub("정규장 마감 후 월가 수급 점검", data[field])
 
+    earnings_raw = market_data.get("earnings_calls_raw") or []
+    if not earnings_raw:
+        data["earnings_calls"] = []
+    elif not isinstance(data.get("earnings_calls"), list):
+        data["earnings_calls"] = []
+
     return data
 
 
@@ -95,6 +101,7 @@ def audit_and_fact_check_analysis(draft_data, market_data, api_key):
         if after_market_info
         else "시간외 ±5% 이상 변동 종목 없음 & 당일 분기실적 발표 빅테크 없음 (절대로 시간외 급등/급락을 언급하지 말 것!)"
     )
+    earnings_raw = market_data.get("earnings_calls_raw") or []
 
     audit_prompt = f"""
 당신은 월가 금융 리포트의 수석 팩트체크 감사관(Chief Fact-Checker)입니다.
@@ -108,8 +115,9 @@ def audit_and_fact_check_analysis(draft_data, market_data, api_key):
 5. 핵심 집중 종목(NVDA & AMD) 정규장 확정치: {json.dumps([{f['name']: f"{f['price']} ({f['pct_str']}, {f['week_str']})"} for f in market_data.get('focus_stocks', [])], ensure_ascii=False)}
 6. 빅테크 M7 확정치: {json.dumps([{s['name']: f"{s['price']} ({s['pct_str']})"} for s in market_data.get('m7', [])], ensure_ascii=False)}
 7. 시간외 거래/실적 팩트체크 결과: {after_market_fact}
-8. yfinance 확정 기업별 실적 발표일 및 컨센서스: {json.dumps(market_data.get('verified_earnings', []), ensure_ascii=False)}
-9. 수집된 월가 IB·애널리스트·주요 외신 헤드라인: {json.dumps([f"[{n.get('source', 'Media')}] {n.get('title', '')}" for n in market_data.get('news', [])], ensure_ascii=False)}
+8. 당일 어닝콜 & 분기 실적(YoY·QoQ) 발표 기업 원본 데이터: {json.dumps(earnings_raw, ensure_ascii=False)}
+9. yfinance 확정 기업별 실적 발표일 및 컨센서스: {json.dumps(market_data.get('verified_earnings', []), ensure_ascii=False)}
+10. 수집된 월가 IB·애널리스트·주요 외신 헤드라인: {json.dumps([f"[{n.get('source', 'Media')}] {n.get('title', '')}" for n in market_data.get('news', [])], ensure_ascii=False)}
 
 [1차 작성된 브리핑 JSON 초안]
 {json.dumps(draft_data, ensure_ascii=False)}
@@ -117,9 +125,10 @@ def audit_and_fact_check_analysis(draft_data, market_data, api_key):
 [엄격한 팩트체크 감사 규칙]
 1. **시간외 거래 환각 절대 금지**: 위 7번 '시간외 거래/실적 팩트체크 결과'에 없는 종목의 시간외 등락률이나 시간외 급등/하락 언급이 초안에 있다면 100% 삭제하고 정규장 종가 및 수급 팩트로 교정할 것.
 2. **수치 및 등락 부호 일치**: 지수, 금리, 환율, NVDA, AMD, M7의 등락률(+)과 하락률(-)이 원본 데이터와 100% 일치하는지 검증할 것.
-3. **실적 발표 일정 정확성**: 하단 `checkpoints`의 빅테크 실적 일정이 8번 `yfinance 확정 기업별 실적 발표일`과 일치하는지 확인하고, 실제 날짜(예: MSFT·GOOGL 10/29, AMZN·INTC 10/30, AAPL 11/03, AMD 11/04, NVDA 11/18 등)를 정확히 명시할 것.
-4. **월가 전문가/기관 의견 반영 확인**: `headline`, `reasons`(3대 근거), `focus_analysis`(NVDA·AMD 분석)에 월가 주요 기관(IB·애널리스트) 및 주요 외신(Bloomberg, Reuters, CNBC, Yahoo Finance 등)의 시각과 컨센서스가 초보자도 이해하기 쉽게 잘 녹아있는지 점검하고 보강할 것.
-5. JSON 키 구조는 초안과 동일하게 유지하고, 마크다운 백틱 없이 순수 JSON만 반환할 것.
+3. **당일 어닝콜(`earnings_calls`) 팩트체크**: 8번 '당일 어닝콜 원본 데이터'가 비어있다면 `earnings_calls`는 반드시 `[]`여야 함. 데이터가 있다면 매출·EPS·YoY·QoQ 수치와 어닝콜 가이던스가 원본 뉴스/재무 데이터와 일치하는지 검증할 것.
+4. **실적 발표 일정 정확성**: 하단 `checkpoints`의 빅테크 실적 일정이 9번 `yfinance 확정 기업별 실적 발표일`과 일치하는지 확인하고, 실제 날짜(예: MSFT·GOOGL 10/29, AMZN·INTC 10/30, AAPL 11/03, AMD 11/04, NVDA 11/18 등)를 정확히 명시할 것.
+5. **월가 전문가/기관 의견 반영 확인**: `headline`, `reasons`(3대 근거), `focus_analysis`(NVDA·AMD 분석)에 월가 주요 기관(IB·애널리스트) 및 주요 외신(Bloomberg, Reuters, CNBC, Yahoo Finance 등)의 시각과 컨센서스가 초보자도 이해하기 쉽게 잘 녹아있는지 점검하고 보강할 것.
+6. JSON 키 구조는 초안과 동일하게 유지하고, 마크다운 백틱 없이 순수 JSON만 반환할 것.
 """
 
     audited = _call_gemini_json(audit_prompt, api_key, temperature=0.15)
@@ -148,10 +157,11 @@ def generate_market_analysis(market_data):
             if after_market_info
             else "특이사항 없음 (시간외 ±5% 이상 변동 종목 없음, 당일 실적 발표 빅테크 없음 -> 절대로 시간외 주가 변동을 지어내지 말 것)"
         )
+        earnings_raw = market_data.get("earnings_calls_raw") or []
 
         prompt = f"""
 당신은 월가 주요 투자은행(IB)과 애널리스트들의 리포트를 종합하여 초보 투자자에게 가장 정확하고 친절하게 설명해 주는 수석 금융 멘토입니다.
-아래의 [검증된 오늘 미국 증시 마감 데이터], [확정 실적 발표 일정], 그리고 [월가 전문가 및 외신 헤드라인]을 철저히 팩트 기반으로 분석하여 일일 브리핑 JSON을 작성해 주세요.
+아래의 [검증된 오늘 미국 증시 마감 데이터], [당일 어닝콜 & 분기 실적(YoY·QoQ) 데이터], [확정 실적 발표 일정], 그리고 [월가 전문가 및 외신 헤드라인]을 철저히 팩트 기반으로 분석하여 일일 브리핑 JSON을 작성해 주세요.
 
 [검증된 오늘의 시장 데이터 (절대 팩트)]
 - 날짜: {market_data.get('date_str')}
@@ -161,6 +171,7 @@ def generate_market_analysis(market_data):
 - 핵심 집중 종목(엔비디아 & AMD): {json.dumps([{f['name']: f"{f['price']} ({f['pct_str']}, {f['week_str']})"} for f in market_data.get('focus_stocks', [])], ensure_ascii=False)}
 - 빅테크 M7: {json.dumps([{s['name']: f"{s['price']} ({s['pct_str']})"} for s in market_data.get('m7', [])], ensure_ascii=False)}
 - 시간외/실적 이슈 (교차검증 완료): {after_market_str}
+- 당일 어닝콜 & 분기 실적(YoY·QoQ) 발표 기업 원본 데이터: {json.dumps(earnings_raw, ensure_ascii=False)}
 - 주요 기업 확정 실적 발표일 및 컨센서스(yfinance): {json.dumps(market_data.get('verified_earnings', []), ensure_ascii=False)}
 - 월가 IB·애널리스트·주요 외신 최신 헤드라인: {json.dumps([f"[{n.get('source', 'Media')}] {n.get('title', '')}" for n in market_data.get('news', [])], ensure_ascii=False)}
 
@@ -168,9 +179,12 @@ def generate_market_analysis(market_data):
 1. **철저한 팩트 기반 작성**: 위 데이터에 있는 정확한 수치와 등락 방향만 사용할 것. 특히 '시간외/실적 이슈'가 '특이사항 없음'일 경우, 절대로 시간외 거래 등락을 언급하거나 추측하지 말 것.
 2. **월가 전문가 의견 취합 반영**: '오늘의 판단(headline)', '3대 핵심 근거(reasons)', 'NVDA·AMD 심층 분석(focus_analysis)'을 작성할 때 단순한 AI 추측이 아니라 수집된 외신(Bloomberg, Reuters, CNBC, Yahoo Finance 등)과 월가 주요 기관(골드만삭스, 모건스탠리, JP모건 등 IB 및 애널리스트)의 시장 진단·컨센서스를 근거로 명시하며 친절한 해요체/하십시오체로 쉽게 풀어서 설명할 것.
 3. **핵심 보유주 심층 브리핑(focus_analysis)**: 투자자가 가장 큰 비중으로 보유 중인 **엔비디아(NVDA)**와 **AMD**의 실제 정규장 종가·등락률과 주간 흐름, 월가 애널리스트들의 AI 반도체 수급/밸류에이션 평가, 그리고 확정된 차기 실적 발표일(NVDA 11/18, AMD 11/04 등) 및 관전 포인트를 정확히 짚어줄 것.
-4. **국내 증시 영향(k_market_impact)**: 필라델피아 반도체 지수 등락, 미 국채금리, 원/달러 환율, 엔비디아 흐름을 바탕으로 **오늘 한국 증시(코스피/코스닥) 및 삼성전자·SK하이닉스 등 주요 섹터에 미칠 영향**을 1~2줄로 명확히 요약할 것.
-5. **체크포인트(checkpoints) 팩트 반영**: `verified_earnings`에 있는 실제 실적 발표 날짜와 주요 경제지표 일정을 토대로 날짜 오차 없이 정확하게 작성할 것.
-6. 마크다운 백틱 없이 순수 JSON 형식으로만 응답할 것.
+4. **당일 어닝콜 & 분기 실적(YoY·QoQ) 집중 요약(`earnings_calls`)**:
+   - `당일 어닝콜 & 분기 실적 발표 기업 원본 데이터`가 비어있지 않은 경우에만 해당 기업의 매출·EPS(또는 영업이익)와 **전년 동기 대비(YoY)·전분기 대비(QoQ) 증감률**, 컨센서스 상회 여부(`badge`: `"어닝 서프라이즈 🔥"`, `"컨센서스 부합"` 등), 그리고 **어닝콜 경영진 가이던스·AI 설비투자(CapEx)·Q&A 핵심 발언 2줄(`highlights`)**을 작성할 것.
+   - `당일 어닝콜 & 분기 실적 발표 기업 원본 데이터`가 빈 배열(`[]`)이면 `earnings_calls`도 반드시 `[]`로 반환할 것.
+5. **국내 증시 영향(k_market_impact)**: 필라델피아 반도체 지수 등락, 미 국채금리, 원/달러 환율, 엔비디아 흐름을 바탕으로 **오늘 한국 증시(코스피/코스닥) 및 삼성전자·SK하이닉스 등 주요 섹터에 미칠 영향**을 1~2줄로 명확히 요약할 것.
+6. **체크포인트(checkpoints) 팩트 반영**: `verified_earnings`에 있는 실제 실적 발표 날짜와 주요 경제지표 일정을 토대로 날짜 오차 없이 정확하게 작성할 것.
+7. 마크다운 백틱 없이 순수 JSON 형식으로만 응답할 것.
 
 [JSON 형식]
 {{
@@ -188,6 +202,18 @@ def generate_market_analysis(market_data):
       "key_point": "보유 투자자를 위한 실전 체크포인트 한 줄 (11/04 실적 발표 컨센서스 및 클라우드 수주 확인 등)"
     }}
   }},
+  "earnings_calls": [
+    {{
+      "name": "기업명 (티커)",
+      "quarter": "분기 확정실적 & 어닝콜",
+      "badge": "어닝 서프라이즈 🔥",
+      "metrics": "매출 $OO.OB (YoY +OO%, QoQ +OO%) · EPS $O.OO (YoY +OO%, 컨센서스 $O.OO 상회)",
+      "highlights": [
+        "어닝콜 경영진 차기 분기 매출·마진 가이던스 및 AI 수요 코멘트 1줄",
+        "어닝콜 설비투자(CapEx)·신제품 로드맵 관련 Q&A 핵심 요약 1줄"
+      ]
+    }}
+  ],
   "reasons": [
     {{
       "title": "첫 번째 핵심 이유 제목 (월가 전문가·외신 핵심 분석 1)",
