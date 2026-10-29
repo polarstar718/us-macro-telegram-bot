@@ -36,6 +36,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("KRBriefing")
 
+KST = datetime.timezone(datetime.timedelta(hours=9))
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 }
@@ -88,6 +90,7 @@ def fetch_kr_index(idx_code, kr_name, tag_label):
         inst_val = trend.get("institutionalValue", "0")
         pers_val = trend.get("personalValue", "0")
         market_status = basic.get("marketStatus", "CLOSE")
+        local_traded_date = (basic.get("localTradedAt") or "")[:10]
 
         sub_val = f"외인 {foreign_val}억 · 기관 {inst_val}억"
         return {
@@ -104,7 +107,8 @@ def fetch_kr_index(idx_code, kr_name, tag_label):
             "personal_억": pers_val,
             "sub_label": "수급(억)",
             "sub_value": sub_val,
-            "market_status": market_status
+            "market_status": market_status,
+            "local_traded_date": local_traded_date
         }
     except Exception as e:
         logger.warning(f"국내 지수 조회 실패 ({idx_code}): {e}")
@@ -251,7 +255,7 @@ def fetch_kr_market_news():
 
 def fetch_kr_earnings_calls():
     """당일 실적 발표(IR/어닝콜)가 있는 시총 상위 대표주를 감지하고 분기 재무제표(YoY·QoQ·컨센서스) 및 어닝콜 속보를 수집"""
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    today_str = datetime.datetime.now(KST).strftime("%Y-%m-%d")
     candidates = [
         ("005930", "삼성전자"),
         ("000660", "SK하이닉스"),
@@ -292,7 +296,7 @@ def fetch_kr_earnings_calls():
             # 당일 실적 발표 수치(YoY, QoQ) 및 컨퍼런스콜(어닝콜) 속보 뉴스 수집
             call_news = []
             seen_titles = set()
-            for q in [f"{name} 실적 매출 영업이익 전년", f"{name} 컨퍼런스콜", f"{name} 어닝콜 HBM 가이던스"]:
+            for q in [f"{name} 실적 매출 영업이익 전년", f"{name} 컨퍼런스콜", f"{name} 어닝콜 가이던스 주주환원"]:
                 try:
                     enc = urllib.parse.quote(q)
                     url = f"https://news.google.com/rss/search?q={enc}&hl=ko&gl=KR&ceid=KR:ko"
@@ -324,7 +328,7 @@ def fetch_kr_earnings_calls():
 
 def collect_kr_market_data():
     """한국 증시 마감 브리핑용 전체 데이터 일괄 수집"""
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(KST)
     weekday_kr = ["월", "화", "수", "목", "금", "토", "일"][now.weekday()]
 
     logger.info("코스피 · 코스닥 지수 및 투자자별 수급 수집 중...")
@@ -378,7 +382,7 @@ def _call_gemini_json(prompt, api_key, temperature=0.25):
             "generationConfig": {"temperature": temperature}
         }
         try:
-            res = requests.post(url, json=payload, timeout=25)
+            res = requests.post(url, json=payload, timeout=45)
             if res.status_code == 200:
                 text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                 text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
@@ -713,10 +717,24 @@ def main():
     logger.info("🇰🇷 한국 증시 마감 브리핑 파이프라인 시작")
     logger.info("==========================================")
 
+    # 정기 스케줄 실행 시 국내 증시 공휴일(휴장일) 자동 스킵 방어 로직
+    if "--skip-if-holiday" in sys.argv:
+        today_kst = datetime.datetime.now(KST).strftime("%Y-%m-%d")
+        kospi_check = fetch_kr_index("KOSPI", "코스피 (KOSPI)", "유가증권")
+        traded_date = kospi_check.get("local_traded_date", "")
+        if traded_date and traded_date != today_kst:
+            logger.info(f"📅 한국 증시 휴장일 감지 (최근 거래일: {traded_date}, 오늘: {today_kst}) — 발송을 건너뜁니다.")
+            return
+
     kr_data = collect_kr_market_data()
     ai_data = generate_kr_ai_analysis(kr_data)
     output_png = "output/kr_briefing.png"
     render_kr_briefing_image(kr_data, ai_data, output_png)
+
+    if "--render-only" in sys.argv:
+        logger.info(f"🖼️ 렌더링 전용 모드 완료 (발송 생략): {os.path.abspath(output_png)}")
+        return
+
     send_kr_briefing_to_telegram(output_png, kr_data, ai_data)
 
     logger.info("==========================================")
