@@ -104,21 +104,24 @@ def get_next_week_dates():
 
 def fetch_real_earnings_calendar(dates):
     """
-    yfinance Ticker.calendar를 병렬 호출하여 실제 기업별 실적 발표일, 컨센서스 EPS, 예상 매출을 수집
+    yfinance의 get_earnings_dates() 및 Ticker.calendar를 병렬 교차검증하여
+    실제 기업별 차기 실적 발표일(이미 발표 완료된 과거 지연 날짜 배제), 컨센서스 EPS, 예상 매출을 수집
     """
+    from data_collector import _resolve_ticker_earnings_status
+
     logger.info("yfinance 기반 주요 빅테크·반도체 실제 실적 발표일 및 컨센서스 수집 중...")
     mon_date = dates["mon"].date()
     fri_date = dates["fri"].date()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     def _fetch_one(item):
         sym, kr_name, icon, is_core = item
         try:
             t = yf.Ticker(sym)
-            cal = t.calendar or {}
-            edates = cal.get("Earnings Date", [])
-            edate = edates[0] if edates else None
-            eps_avg = cal.get("Earnings Average")
-            rev_avg = cal.get("Revenue Average")
+            status = _resolve_ticker_earnings_status(t, sym, now_utc)
+            edate = status["next_earnings_date"]
+            eps_avg = status["next_eps_estimate"]
+            rev_avg = status["next_rev_estimate"]
 
             eps_str = f"${float(eps_avg):.2f}" if eps_avg is not None else "N/A"
             if rev_avg is not None:
