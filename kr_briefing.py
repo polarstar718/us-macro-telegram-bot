@@ -255,6 +255,8 @@ def fetch_kr_market_news():
 
 def fetch_kr_earnings_calls():
     """당일 실적 발표(IR/어닝콜)가 있는 시총 상위 대표주를 감지하고 분기 재무제표(YoY·QoQ·컨센서스) 및 어닝콜 속보를 수집"""
+    from data_collector import is_earnings_already_reported
+
     today_str = datetime.datetime.now(KST).strftime("%Y-%m-%d")
     candidates = [
         ("005930", "삼성전자"),
@@ -275,6 +277,11 @@ def fetch_kr_earnings_calls():
 
             # 당일(D-Day == 0 또는 irScheduleDate == today_str) 실적 발표 기업만 감지
             if ir_date != today_str and ir_dday != 0:
+                continue
+
+            # 이미 당해 분기 실적 브리핑이 발송된 종목(reported_earnings.json)은 중복 제외
+            if is_earnings_already_reported(code, ir_date or today_str, market="kr"):
+                logger.info(f"ℹ️ [{name}({code})] 이미 실적 브리핑이 발송된 분기이므로 중복 제외합니다.")
                 continue
 
             # 분기 재무 데이터(매출액, 영업이익, 당기순이익, 영업이익률) 수집 (YoY/QoQ/컨센서스 비교용)
@@ -735,7 +742,12 @@ def main():
         logger.info(f"🖼️ 렌더링 전용 모드 완료 (발송 생략): {os.path.abspath(output_png)}")
         return
 
-    send_kr_briefing_to_telegram(output_png, kr_data, ai_data)
+    sent = send_kr_briefing_to_telegram(output_png, kr_data, ai_data)
+    if sent and ("--broadcast" in sys.argv or os.getenv("BROADCAST_ALL", "").lower() in ("1", "true", "yes")):
+        from data_collector import mark_earnings_reported
+        kr_earnings = kr_data.get("earnings_calls_raw") or []
+        if kr_earnings:
+            mark_earnings_reported(kr_earnings, market="kr")
 
     logger.info("==========================================")
     logger.info(f"🎉 한국 증시 브리핑 완료! 결과물: {os.path.abspath(output_png)}")
