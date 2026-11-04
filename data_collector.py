@@ -7,6 +7,7 @@
 import datetime
 import json
 import logging
+import os
 import urllib.request
 import xml.etree.ElementTree as ET
 import yfinance as yf
@@ -169,9 +170,206 @@ def fetch_expert_market_opinions():
     return opinions
 
 
+REPORTED_EARNINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reported_earnings.json")
+
+
+def load_reported_earnings():
+    """이미 브리핑 발송이 완료된 분기 실적 발표 이력(reported_earnings.json) 로드"""
+    if not os.path.exists(REPORTED_EARNINGS_FILE):
+        return {"us": {}, "kr": {}}
+    try:
+        with open(REPORTED_EARNINGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                return {"us": {}, "kr": {}}
+            data.setdefault("us", {})
+            data.setdefault("kr", {})
+            return data
+    except Exception as e:
+        logger.warning(f"reported_earnings.json 로드 실패 ({e})")
+        return {"us": {}, "kr": {}}
+
+
+def save_reported_earnings(data):
+    """발송 완료된 분기 실적 발표 이력을 reported_earnings.json에 영구 저장"""
+    try:
+        with open(REPORTED_EARNINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"reported_earnings.json 저장 실패: {e}")
+
+
+def is_earnings_already_reported(ticker, event_date_str=None, market="us", cooldown_days=45):
+    """
+    해당 종목(ticker)이 최근 cooldown_days(기본 45일, 즉 동일 분기 어닝 시즌) 이내에
+    이미 실적 브리핑이 발송되었는지 확인하여 이틀 연속 중복 발송을 원천 차단
+    """
+    reported_map = load_reported_earnings().get(market, {})
+    last_date_str = reported_map.get(ticker)
+    if not last_date_str:
+        return False
+    try:
+        last_date = datetime.date.fromisoformat(str(last_date_str)[:10])
+        if event_date_str:
+            ref_date = datetime.date.fromisoformat(str(event_date_str)[:10])
+        else:
+            ref_date = datetime.datetime.now(datetime.timezone.utc).date()
+        return abs((ref_date - last_date).days) <= cooldown_days
+    except Exception:
+        return False
+
+
+def mark_earnings_reported(items, market="us"):
+    """
+    브리핑 발송이 완료된 어닝콜/실적 종목을 reported_earnings.json에 기록
+    items: [{"ticker": "GOOGL", "earnings_date": "2026-10-28"}, ...] 또는 [("GOOGL", "2026-10-28"), ...]
+    """
+    if not items:
+        return
+    data = load_reported_earnings()
+    market_map = data.setdefault(market, {})
+    today_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    updated = False
+
+    for item in items:
+        ticker = None
+        date_str = None
+        if isinstance(item, dict):
+            ticker = item.get("ticker") or item.get("code")
+            date_str = item.get("earnings_date") or item.get("ir_date") or today_iso
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            ticker, date_str = item[0], item[1]
+        if ticker:
+            date_clean = str(date_str)[:10] if date_str else today_iso
+            if market_map.get(ticker) != date_clean:
+                market_map[ticker] = date_clean
+                updated = True
+                logger.info(f"📝 [{market.upper()}] 실적 브리핑 완료 이력 기록: {ticker} ({date_clean})")
+
+    if updated:
+        save_reported_earnings(data)
+
+
+def _resolve_ticker_earnings_status(t, sym, now_utc=None):
+    """
+    yfinance의 Ticker.get_earnings_dates()와 Ticker.calendar를 교차검증하여:
+    1) 최근 20시간 이내(-1.0h ~ +20.0h)에 실제로 실적을 발표했고 아직 브리핑되지 않았는지(is_earnings_just_reported)
+    2) 당해 분기 실제 EPS 컨센서스(eps_estimate)와 발표 EPS(eps_actual), 서프라이즈 비율(surprise_pct)
+       -> 주의: 실적 발표 직후 Ticker.calendar의 Revenue/Earnings Average는 '차기 분기'로 롤오버되므로 당해 분기 평가에 절대 사용 금지!
+    3) 이미 발표 완료된 과거 날짜가 섞이지 않은 실제 '차기 실적 발표 예정일(next_earnings_date)'
+    을 정확히 판별하여 반환
+    """
+    import math
+    try:
+        from zoneinfo import ZoneInfo
+        ny_tz = ZoneInfo("America/New_York")
+    except Exception:
+        ny_tz = datetime.timezone(datetime.timedelta(hours=-5))
+
+    if now_utc is None:
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_ny_date = now_utc.astimezone(ny_tz).date()
+
+    def _clean_num(val):
+        if val is None:
+            return None
+        try:
+            f = float(val)
+            return None if math.isnan(f) else f
+        except Exception:
+            return None
+
+    is_just_reported = False
+    reported_date_str = None
+    last_completed_date = None
+    eps_estimate = None
+    eps_actual = None
+    surprise_pct = None
+    future_candidates = []
+    completed_dates_in_df = set()
+
+    try:
+        ed_df = t.get_earnings_dates(limit=8)
+        if ed_df is not None and not ed_df.empty:
+            for idx_ts, row in ed_df.iterrows():
+                ts_utc = idx_ts.astimezone(datetime.timezone.utc)
+                row_date = idx_ts.astimezone(ny_tz).date()
+                row_date_str = row_date.strftime("%Y-%m-%d")
+                hours_since = (now_utc - ts_utc).total_seconds() / 3600.0
+
+                est_val = _clean_num(row.get("EPS Estimate"))
+                rep_val = _clean_num(row.get("Reported EPS"))
+                surp_val = _clean_num(row.get("Surprise(%)"))
+
+                if rep_val is not None or hours_since > 20.0:
+                    completed_dates_in_df.add(row_date)
+                    if last_completed_date is None or row_date > last_completed_date:
+                        last_completed_date = row_date
+
+                # 최근 마감 세션(-1.0시간 ~ +20.0시간 이내)에 발표된 실적이며, 아직 브리핑 이력(reported_earnings.json)에 없는 경우만 True!
+                if -1.0 <= hours_since <= 20.0:
+                    if not is_earnings_already_reported(sym, row_date_str, market="us"):
+                        is_just_reported = True
+                        reported_date_str = row_date_str
+                        eps_estimate = est_val
+                        eps_actual = rep_val
+                        surprise_pct = surp_val
+
+                # 아직 발표 전인 향후 실적 일정 후보 (hours_since < -1.0 이고 Reported EPS가 없으며 이미 브리핑된 분기가 아닌 경우)
+                if hours_since < -1.0 and rep_val is None and not is_earnings_already_reported(sym, row_date_str, market="us"):
+                    future_candidates.append((row_date, est_val))
+    except Exception as e:
+        logger.debug(f"get_earnings_dates 조회 예외 ({sym}): {e}")
+
+    future_candidates.sort(key=lambda x: x[0])
+    next_from_ed = future_candidates[0] if future_candidates else (None, None)
+
+    cal = {}
+    try:
+        cal = t.calendar or {}
+    except Exception:
+        pass
+
+    cal_dates = [d for d in cal.get("Earnings Date", []) if isinstance(d, datetime.date)]
+    cal_date = cal_dates[0] if cal_dates else None
+    cal_eps = _clean_num(cal.get("Earnings Average"))
+    cal_rev = _clean_num(cal.get("Revenue Average"))
+
+    # 차기 실적 발표일 결정:
+    # get_earnings_dates()의 향후 일정(next_from_ed)이 있으면 뉴욕 현지시간 기준이므로 최우선 채택.
+    # 만약 없을 때만 cal_date를 쓰되, 과거 날짜이거나 이미 발표 완료된 분기(reported_earnings.json 또는 completed_dates_in_df 근접)이면 제외!
+    next_earnings_date = None
+    if next_from_ed[0] is not None:
+        next_earnings_date = next_from_ed[0]
+    elif cal_date is not None:
+        is_cal_stale = (
+            cal_date < now_ny_date
+            or is_earnings_already_reported(sym, cal_date.strftime("%Y-%m-%d"), market="us")
+            or any(abs((cal_date - cd).days) <= 5 for cd in completed_dates_in_df)
+        )
+        if not is_cal_stale:
+            next_earnings_date = cal_date
+
+    next_eps_est = cal_eps if cal_eps is not None else next_from_ed[1]
+    next_rev_est = cal_rev
+
+    return {
+        "is_earnings_just_reported": is_just_reported,
+        "reported_date_str": reported_date_str,
+        "last_completed_date_str": last_completed_date.strftime("%Y-%m-%d") if last_completed_date else None,
+        "eps_estimate": eps_estimate,
+        "eps_actual": eps_actual,
+        "surprise_pct": surprise_pct,
+        "next_earnings_date": next_earnings_date,
+        "next_eps_estimate": next_eps_est,
+        "next_rev_estimate": next_rev_est,
+    }
+
+
 def fetch_verified_upcoming_earnings(tickers=None):
     """
-    yfinance Ticker.calendar를 통해 주요 빅테크/반도체 기업의 실제 확정(또는 컨센서스) 실적 발표일과 예상 EPS/매출 조회
+    yfinance의 get_earnings_dates()와 Ticker.calendar를 교차검증하여
+    주요 빅테크/반도체 기업의 실제 차기 실적 발표일(과거 지연 날짜 완벽 배제)과 예상 EPS/매출 조회
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -180,18 +378,19 @@ def fetch_verified_upcoming_earnings(tickers=None):
             ("NVDA", "엔비디아"), ("AMD", "AMD"), ("MSFT", "마이크로소프트"),
             ("GOOGL", "알파벳(구글)"), ("AMZN", "아마존"), ("AAPL", "애플"),
             ("META", "메타"), ("TSLA", "테슬라"), ("AVGO", "브로드컴"),
-            ("MU", "마이크론"), ("INTC", "인텔"), ("ARM", "ARM")
+            ("MU", "마이크론"), ("INTC", "인텔"), ("ARM", "ARM"), ("QCOM", "퀄컴")
         ]
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     def _fetch_one(pair):
         sym, kr_name = pair
         try:
             t = yf.Ticker(sym)
-            cal = t.calendar or {}
-            edates = cal.get("Earnings Date", [])
-            edate = edates[0] if edates else None
-            eps_avg = cal.get("Earnings Average")
-            rev_avg = cal.get("Revenue Average")
+            status = _resolve_ticker_earnings_status(t, sym, now_utc)
+            edate = status["next_earnings_date"]
+            eps_avg = status["next_eps_estimate"]
+            rev_avg = status["next_rev_estimate"]
 
             eps_str = f"${float(eps_avg):.2f}" if eps_avg is not None else "N/A"
             if rev_avg is not None:
@@ -200,10 +399,14 @@ def fetch_verified_upcoming_earnings(tickers=None):
             else:
                 rev_str = "N/A"
 
+            last_rep = load_reported_earnings().get("us", {}).get(sym) or status.get("last_completed_date_str")
+            status_note = f"최근발표완료({last_rep}) · 차기일정" if last_rep else "발표예정"
+
             return {
                 "ticker": sym,
                 "name": kr_name,
                 "earnings_date": edate.strftime("%Y-%m-%d") if edate else "미정",
+                "status_note": status_note,
                 "consensus_eps": eps_str,
                 "consensus_rev": rev_str
             }
@@ -281,10 +484,11 @@ def fetch_after_market_news(watch_tickers=None):
     M7 및 주요 반도체 종목의 장 마감 후 실적 발표 및 시간외 거래(After-market) 팩트체크
     [표시 기준]
     1. 실적 발표 여부와 무관하게 시간외 등락률이 ±5.0% 이상인 종목
-    2. 최근 마감된 거래일(또는 당일)에 분기 실적(Earnings)을 발표한 종목 (±5% 미만이어도 표시)
+    2. 최근 마감 세션(-1h ~ +20h)에 분기 실적(Earnings)을 발표했고 아직 브리핑되지 않은 종목 (±5% 미만이어도 표시)
     [검증 방식]
     - yfinance의 postMarketChangePercent 단위 오류 방지를 위해 (시간외현재가 - 정규장종가) / 정규장종가 * 100 으로 직접 계산
     - postMarketChangePercent 원시값 및 타임스탬프(postMarketTime >= regularMarketTime)와 교차 검증 수행
+    - reported_earnings.json 및 get_earnings_dates() 타임스탬프를 대조하여 이미 전날 브리핑된 실적 종목의 중복 노출 원천 차단
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -295,20 +499,16 @@ def fetch_after_market_news(watch_tickers=None):
         ]
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
-    recent_dates = {
-        (now_utc - datetime.timedelta(days=d)).date()
-        for d in range(0, 2)
-    }
 
     def _check_ticker(ticker_symbol):
         try:
             t = yf.Ticker(ticker_symbol)
             info = t.info or {}
-            cal = t.calendar or {}
+            status = _resolve_ticker_earnings_status(t, ticker_symbol, now_utc)
 
-            # 1) 분기 실적 발표일 여부 확인 (yfinance calendar 기준)
-            edates = cal.get("Earnings Date", [])
-            is_earnings_today = any(ed in recent_dates for ed in edates if isinstance(ed, datetime.date))
+            # 1) 이번 세션에 신규 발표된(미브리핑) 분기 실적 여부 확인
+            is_earnings_today = status["is_earnings_just_reported"]
+            earnings_date_str = status["reported_date_str"]
 
             # 2) 정규장 종가 및 시간외 현재가 조회
             reg_price = info.get("regularMarketPrice") or info.get("currentPrice")
@@ -326,16 +526,15 @@ def fetch_after_market_news(watch_tickers=None):
                 # (시간외 현재가 - 정규장 종가)로 직접 등락률(%) 계산
                 direct_pct = ((post_price_f - reg_price_f) / reg_price_f) * 100.0
 
-                # 타임스탬프 신선도 검증 (post_time이 reg_time 이후이고 36시간 이내인지)
+                # 타임스탬프 신선도 검증 (post_time이 reg_time 이후이고 24시간 이내인지)
                 is_fresh = True
                 if post_time and reg_time:
-                    if post_time < reg_time or (now_utc.timestamp() - post_time) > 36 * 3600:
+                    if post_time < reg_time or (now_utc.timestamp() - post_time) > 24 * 3600:
                         is_fresh = False
 
                 # raw_post_pct와 교차 검증 (yfinance는 이미 % 단위이거나 소수점일 수 있으므로 둘 다 대조)
                 if raw_post_pct is not None:
                     raw_f = float(raw_post_pct)
-                    # raw_f 자체가 direct_pct와 가깝거나, raw_f*100이 direct_pct와 가까우면 통과
                     diff_as_pct = abs(raw_f - direct_pct)
                     diff_as_dec = abs((raw_f * 100.0) - direct_pct)
                     if min(diff_as_pct, diff_as_dec) > 1.0:
@@ -359,10 +558,11 @@ def fetch_after_market_news(watch_tickers=None):
                     "pct_str": f"{sign}{direct_pct:.2f}%",
                     "cls": cls,
                     "is_earnings": is_earnings_today,
+                    "earnings_date": earnings_date_str,
                     "text": f"{ticker_symbol} ({tag_prefix}) {sign}{direct_pct:.2f}% (정규 ${float(reg_price):,.2f} → 시간외 ${float(post_price):,.2f})"
                 }
 
-            # 조건 2: 분기 실적 발표일인 종목 (±5% 미만 변동이어도 표기)
+            # 조건 2: 당일 신규 분기 실적 발표 종목 (±5% 미만 변동이어도 1회 표기)
             if is_earnings_today:
                 if has_valid_post:
                     cls = "up" if direct_pct > 0 else "down" if direct_pct < 0 else "neutral"
@@ -375,11 +575,18 @@ def fetch_after_market_news(watch_tickers=None):
                         "pct_str": f"{sign}{direct_pct:.2f}%",
                         "cls": cls,
                         "is_earnings": True,
-                        "text": f"{ticker_symbol} [분기실적 발표] 시간외 {sign}{direct_pct:.2f}% (${float(post_price):,.2f})"
+                        "earnings_date": earnings_date_str,
+                        "text": f"{ticker_symbol} [분기실적 발표] 시간외 {sign}{direct_pct:.2f}% (정규 ${float(reg_price):,.2f} → 시간외 ${float(post_price):,.2f})"
                     }
                 elif reg_price:
-                    eps_est = cal.get("Earnings Average")
-                    eps_txt = f" (컨센서스 EPS ${float(eps_est):.2f})" if eps_est is not None else ""
+                    eps_est = status.get("eps_estimate")
+                    eps_act = status.get("eps_actual")
+                    if eps_act is not None and eps_est is not None:
+                        eps_txt = f" (발표 EPS ${float(eps_act):.2f} vs 컨센서스 ${float(eps_est):.2f})"
+                    elif eps_est is not None:
+                        eps_txt = f" (컨센서스 EPS ${float(eps_est):.2f})"
+                    else:
+                        eps_txt = ""
                     return {
                         "ticker": ticker_symbol,
                         "price": f"${float(reg_price):,.2f}",
@@ -388,7 +595,8 @@ def fetch_after_market_news(watch_tickers=None):
                         "pct_str": "실적발표",
                         "cls": "neutral",
                         "is_earnings": True,
-                        "text": f"{ticker_symbol} [분기실적 발표일] 종가 ${float(reg_price):,.2f}{eps_txt}"
+                        "earnings_date": earnings_date_str,
+                        "text": f"{ticker_symbol} [분기실적 발표] 종가 ${float(reg_price):,.2f}{eps_txt}"
                     }
         except Exception as e:
             logger.debug(f"시간외 거래/실적 조회 중 예외 ({ticker_symbol}): {e}")
@@ -415,8 +623,13 @@ def fetch_after_market_news(watch_tickers=None):
 
 def fetch_us_earnings_calls(watch_list=None):
     """
-    최근 마감 세션(당일/전일)에 실적 발표 및 어닝콜을 진행한 미국 시총 상위 빅테크·반도체 기업을 감지하고,
-    분기 재무제표(YoY·QoQ 비교 기준), 컨센서스(EPS·매출), 어닝콜 가이던스 뉴스를 수집
+    최근 마감 세션(-1h ~ +20h)에 실제로 실적 발표 및 어닝콜을 진행했고 아직 브리핑되지 않은
+    미국 시총 상위 빅테크·반도체 기업만 정확히 감지하여:
+    - 당해 분기 정확한 EPS 컨센서스/발표치 (get_earnings_dates 기준, 차기 분기 롤오버 오염 방지)
+    - 시간외 주가 반응 (정규장 종가 대비 시간외 등락률 분리 표기)
+    - 분기 재무제표(YoY·QoQ 비교 기준 및 당해 분기 반영 여부 플래그)
+    - 어닝콜 가이던스 및 컨센서스 상회/하회(Beat/Miss) 뉴스 속보
+    를 수집
     """
     import urllib.parse
     import urllib.request
@@ -428,14 +641,10 @@ def fetch_us_earnings_calls(watch_list=None):
             ("AAPL", "애플"), ("GOOGL", "알파벳(구글)"), ("AMZN", "아마존"),
             ("META", "메타"), ("TSLA", "테슬라"), ("AVGO", "브로드컴"),
             ("MU", "마이크론"), ("INTC", "인텔"), ("ARM", "ARM"),
-            ("TSM", "TSMC"), ("LLY", "일라이릴리")
+            ("TSM", "TSMC"), ("LLY", "일라이릴리"), ("QCOM", "퀄컴")
         ]
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
-    recent_dates = {
-        (now_utc - datetime.timedelta(days=d)).date()
-        for d in range(0, 2)
-    }
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -445,23 +654,49 @@ def fetch_us_earnings_calls(watch_list=None):
     for sym, kr_name in watch_list:
         try:
             t = yf.Ticker(sym)
-            cal = t.calendar or {}
-            edates = cal.get("Earnings Date", [])
-            matched_dates = [ed for ed in edates if isinstance(ed, datetime.date) and ed in recent_dates]
-            if not matched_dates:
+            status = _resolve_ticker_earnings_status(t, sym, now_utc)
+            if not status["is_earnings_just_reported"]:
                 continue
 
-            eps_avg = cal.get("Earnings Average")
-            rev_avg = cal.get("Revenue Average")
-            cons_eps = f"${float(eps_avg):.2f}" if eps_avg is not None else "N/A"
-            cons_rev = f"${float(rev_avg) / 1e9:.2f}B" if rev_avg is not None else "N/A"
+            earnings_date_str = status["reported_date_str"] or now_utc.strftime("%Y-%m-%d")
+            eps_est = status.get("eps_estimate")
+            eps_act = status.get("eps_actual")
+            surp_pct = status.get("surprise_pct")
 
-            # 분기 손익계산서(YoY/QoQ 기준점) 조회
+            cons_eps = f"${float(eps_est):.2f}" if eps_est is not None else "뉴스 속보 내 컨센서스 참조"
+            actual_eps_str = f"${float(eps_act):.2f}" if eps_act is not None else "뉴스 속보 내 발표 EPS 참조"
+            if surp_pct is not None:
+                surp_sign = "+" if float(surp_pct) > 0 else ""
+                surprise_str = f"{surp_sign}{float(surp_pct):.2f}%"
+            else:
+                surprise_str = "뉴스 속보 확인"
+
+            # 정규장 종가 및 시간외 주가 반응 계산 (실적 자체 평가와 주가 반응을 명확히 분리하기 위함)
+            info = t.info or {}
+            reg_price = info.get("regularMarketPrice") or info.get("currentPrice")
+            post_price = info.get("postMarketPrice")
+            post_reaction_str = "시간외 가격 변동 미집계"
+            if reg_price and post_price and float(reg_price) > 0:
+                reg_f = float(reg_price)
+                post_f = float(post_price)
+                post_pct = ((post_f - reg_f) / reg_f) * 100.0
+                sign = "+" if post_pct > 0 else ""
+                post_reaction_str = f"정규장 종가 ${reg_f:,.2f} → 시간외 ${post_f:,.2f} ({sign}{post_pct:.2f}%)"
+            elif reg_price:
+                post_reaction_str = f"정규장 종가 ${float(reg_price):,.2f}"
+
+            # 분기 손익계산서(YoY/QoQ 기준점) 조회 및 최신 분기 반영 여부 검증
             hist_quarters = {}
+            is_current_quarter_in_table = False
             try:
                 q_stmt = t.quarterly_income_stmt
                 if q_stmt is not None and not q_stmt.empty:
-                    for col in list(q_stmt.columns)[:5]:
+                    cols = list(q_stmt.columns)[:5]
+                    if cols and hasattr(cols[0], "date"):
+                        latest_col_date = cols[0].date()
+                        if (now_utc.date() - latest_col_date).days <= 65:
+                            is_current_quarter_in_table = True
+                    for col in cols:
                         col_key = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
                         col_dict = {}
                         for metric in ["Total Revenue", "Operating Income", "Net Income", "Diluted EPS"]:
@@ -477,12 +712,26 @@ def fetch_us_earnings_calls(watch_list=None):
             except Exception as qe:
                 logger.debug(f"분기 손익계산서 조회 실패 ({sym}): {qe}")
 
-            # 어닝콜 및 실적(YoY/QoQ) 뉴스 헤드라인 수집 (영문 + 국문)
+            if is_current_quarter_in_table:
+                table_note = (
+                    "최신 분기 GAAP 재무제표가 historical_quarters 첫 번째 열에 반영되어 있음. "
+                    "단, 일회성 비용/이익이 포함된 GAAP EPS와 월가 컨센서스 기준인 Non-GAAP(조정) EPS가 다를 수 있으므로 "
+                    "반드시 earnings_call_news 헤드라인의 Beat/Miss 판정 및 Non-GAAP 수치와 교차검증할 것."
+                )
+            else:
+                table_note = (
+                    "주의: 장 마감 직후라 historical_quarters에는 직전 분기 및 전년 동기(과거 분기) 데이터만 들어있음! "
+                    "따라서 당일 발표된 최신 분기의 매출·EPS·YoY 증감률은 반드시 earnings_call_news(실시간 실적 속보)와 "
+                    "eps_actual/consensus_eps를 기준으로 작성하고, historical_quarters는 전년 동기(YoY)/전분기(QoQ) 비교 기준점으로만 활용할 것."
+                )
+
+            # 어닝콜 및 실적(Beat/Miss, YoY/QoQ, 가이던스, 시간외 반응) 뉴스 헤드라인 수집 (최근 48시간 이내 한정)
             headlines = []
             seen = set()
             rss_urls = [
-                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{sym} earnings call revenue EPS YoY guidance when:2d')}&hl=en-US&gl=US&ceid=US:en",
-                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{kr_name} 실적 매출 EPS 어닝콜 가이던스')}&hl=ko&gl=KR&ceid=KR:ko"
+                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{sym} earnings beat miss revenue EPS guidance after hours when:2d')}&hl=en-US&gl=US&ceid=US:en",
+                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{sym} earnings call revenue YoY CapEx outlook when:2d')}&hl=en-US&gl=US&ceid=US:en",
+                f"https://news.google.com/rss/search?q={urllib.parse.quote(f'{kr_name} 실적 매출 EPS 어닝콜 가이던스 when:2d')}&hl=ko&gl=KR&ceid=KR:ko"
             ]
             for r_url in rss_urls:
                 try:
@@ -500,13 +749,17 @@ def fetch_us_earnings_calls(watch_list=None):
             earnings_calls.append({
                 "ticker": sym,
                 "name": kr_name,
-                "earnings_date": matched_dates[0].strftime("%Y-%m-%d"),
+                "earnings_date": earnings_date_str,
                 "consensus_eps": cons_eps,
-                "consensus_rev": cons_rev,
+                "actual_eps": actual_eps_str,
+                "eps_surprise_pct": surprise_str,
+                "post_market_reaction": post_reaction_str,
+                "is_current_quarter_in_table": is_current_quarter_in_table,
+                "financial_table_note": table_note,
                 "historical_quarters": hist_quarters,
-                "earnings_call_news": headlines[:10]
+                "earnings_call_news": headlines[:12]
             })
-            logger.info(f"🎙️ 미 증시 당일 어닝콜/실적발표 감지: {kr_name}({sym})")
+            logger.info(f"🎙️ 미 증시 당일 신규 어닝콜/실적발표 감지: {kr_name}({sym}) [발표일: {earnings_date_str}]")
         except Exception as e:
             logger.debug(f"미 증시 어닝콜 감지 중 예외 ({sym}): {e}")
 
