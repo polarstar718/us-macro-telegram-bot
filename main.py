@@ -11,7 +11,7 @@ import os
 import sys
 from dotenv import load_dotenv
 
-from data_collector import collect_all_market_data
+from data_collector import collect_all_market_data, mark_earnings_reported
 from ai_analyzer import generate_market_analysis
 from renderer import render_briefing_image
 from notifier import send_briefing_to_telegram
@@ -48,6 +48,10 @@ def main():
     output_png = "output/briefing.png"
     render_briefing_image(market_data, ai_data, output_png)
 
+    if "--render-only" in sys.argv:
+        logger.info(f"🖼️ 렌더링 전용 모드 완료 (발송 생략): {os.path.abspath(output_png)}")
+        return
+
     # 4. S&P 500 일간 히트맵 캡처
     logger.info("[4/5] Finviz S&P 500 일간(1-Day) 히트맵 캡처 중...")
     heatmap_png = "output/daily_heatmap.png"
@@ -61,6 +65,17 @@ def main():
     sent = send_briefing_to_telegram(output_png, market_data, ai_data, heatmap_path=heatmap_png)
     if sent:
         logger.info("✅ 텔레그램 발송이 완료되었습니다!")
+        if "--broadcast" in sys.argv or os.getenv("BROADCAST_ALL", "").lower() in ("1", "true", "yes"):
+            reported_items = list(market_data.get("earnings_calls_raw") or [])
+            after_items = (market_data.get("after_market") or {}).get("items") or []
+            for a_item in after_items:
+                if a_item.get("is_earnings") and a_item.get("ticker"):
+                    reported_items.append({
+                        "ticker": a_item["ticker"],
+                        "earnings_date": a_item.get("earnings_date")
+                    })
+            if reported_items:
+                mark_earnings_reported(reported_items, market="us")
     else:
         logger.info("ℹ️ 텔레그램 설정이 없거나 전송되지 않았습니다. 생성된 이미지는 'output/' 디렉터리에서 확인하실 수 있습니다.")
 
