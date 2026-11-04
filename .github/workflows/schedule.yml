@@ -62,10 +62,10 @@ jobs:
             python main.py --broadcast
           fi
 
-      - name: Sync Subscribers
+      - name: Sync Subscribers & Reported Earnings State
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add subscribers.json
-          git diff --staged --quiet || (git commit -m "chore: sync subscribers" && git push)
+          git add subscribers.json reported_earnings.json
+          git diff --staged --quiet || (git commit -m "chore: sync subscribers and reported earnings state" && git push)
